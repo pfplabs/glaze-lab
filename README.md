@@ -1,6 +1,6 @@
 # ✨ Glaze
 
-Glaze finds a **moment** inside a marketing video. You describe what happens on screen. The result is a time range, a thumbnail of that span, and the product observation that overlaps it.
+Glaze finds a **moment** inside a marketing video. You describe what happens on screen. The result is a time range, a thumbnail, and the product observation that overlaps it.
 
 Search runs on a [TwelveLabs](https://www.twelvelabs.io/) index. Marengo 3.0 makes the video searchable. Pegasus 1.6 then writes what is visible or spoken. This app matches that text to a product in the local catalog. Opening a result plays the TwelveLabs HLS stream and seeks to the moment. Hovering a thumbnail plays that same span, muted, and loops it.
 
@@ -72,8 +72,8 @@ A file has to pass both models and the direct upload limit: up to 200 MB, from 4
 
 On the home page, type a sentence or use one of the example queries. Results are moments, not filenames.
 
-- **Rank** is TwelveLabs’ ordering for that query. It is not a percentage and not a product probability.
-- The chips (SKU, shot, lighting, on-screen text, spoken mention) come from the enrichment observation that overlaps the hit.
+- **Rank** is TwelveLabs’ ordering for that query. The number beside it is the 0–1 confidence Pegasus returned for that observation. Rank is not a product probability.
+- The chips come from the enrichment observation that overlaps the hit: catalog match, line, shot, shown or applied, lighting, setting, on-screen text, and spoken mention.
 - Format, visual attributes, SKU, and product status are applied on this page after the search returns. A missing row is not proof the moment is absent from the index.
 - **Creator** is disabled. The enrichment format is tutorial, demo, ad, before/after, or other.
 - Hover a thumbnail to play the matched span. Leave the thumbnail and the still comes back.
@@ -89,7 +89,7 @@ Taken on the `lab-sample-v2` index. Your index name and files will differ. The s
 
 ![Home page with example queries and library counts](docs/images/home.png)
 
-![Search results for lipstick, with the matched time range and product chips](docs/images/search-moments.png)
+![Search results for a Fenty Beauty Gloss Bomb close-up, with the time range, product chips, and model confidence beside rank](docs/images/search-moments.png)
 
 ![The same results while the first thumbnail plays the matched span](docs/images/search-preview.png)
 
