@@ -1,0 +1,62 @@
+{
+  "synthetic": true,
+  "note": "Hand-written demo catalog for the Glaze proof of concept. These are not the customer's 10,000 SKUs.",
+  "products": [
+    {
+      "id": "VM-LIP-112",
+      "line": "Velvet Matte",
+      "name": "Velvet Matte Lipstick",
+      "shade": "Crimson",
+      "category": "makeup",
+      "aliases": ["velvet matte lipstick", "velvet matte crimson", "crimson 112"]
+    },
+    {
+      "id": "SS-FDN-210",
+      "line": "Second Skin",
+      "name": "Second Skin Foundation",
+      "shade": "210",
+      "category": "makeup",
+      "aliases": ["second skin 210"]
+    },
+    {
+      "id": "SS-FDN-340",
+      "line": "Second Skin",
+      "name": "Second Skin Foundation",
+      "shade": "340 Warm",
+      "category": "makeup",
+      "aliases": ["second skin 340", "second skin 340 warm"]
+    },
+    {
+      "id": "SS-FDN-510",
+      "line": "Second Skin",
+      "name": "Second Skin Foundation",
+      "shade": "510",
+      "category": "makeup",
+      "aliases": ["second skin 510"]
+    },
+    {
+      "id": "HY-SKN-020",
+      "line": "Hydra Glow",
+      "name": "Hydra Glow Serum",
+      "shade": null,
+      "category": "skincare",
+      "aliases": ["hydra glow serum", "hydra serum"]
+    },
+    {
+      "id": "BR-HAIR-001",
+      "line": "Bond Repair",
+      "name": "Bond Repair Mask",
+      "shade": null,
+      "category": "haircare",
+      "aliases": ["bond repair mask"]
+    },
+    {
+      "id": "GL-EYE-007",
+      "line": "Night Palette",
+      "name": "Night Palette",
+      "shade": null,
+      "category": "makeup",
+      "aliases": ["night palette"]
+    }
+  ]
+}

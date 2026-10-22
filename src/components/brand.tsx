@@ -1,0 +1,118 @@
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
+import { Database, FolderOpen, Play, Search as SearchIcon, Settings, Shapes } from "lucide-react";
+import { fmt, type Video } from "@/lib/library";
+import twelvelabsLogo from "@/assets/twelvelabs-logo.png.asset.json";
+import glazeLogo from "@/assets/glaze-logo-white.png";
+
+export function Chip({ on, children, onClick }: { on: boolean; children: React.ReactNode; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className={`rounded-sm border px-1.5 py-0.5 text-xs transition ${on ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground"}`}>
+      {children}
+    </button>
+  );
+}
+
+export function Thumb({ hue, t, big }: { hue: number; t: number; big?: boolean }) {
+  return (
+    <div className={`thumb relative shrink-0 overflow-hidden rounded-sm ${big ? "aspect-video w-full" : "h-16 w-28"}`} style={{ "--h": hue } as React.CSSProperties}>
+      <Play className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 text-primary-foreground/90" />
+      <span className="absolute bottom-1 right-1 rounded-sm bg-foreground/70 px-1 font-mono text-[10px] text-background">{fmt(t)}</span>
+    </div>
+  );
+}
+
+export function Score({ v }: { v: number }) {
+  return <span className="shrink-0 rounded-sm border border-border bg-muted px-1 py-px font-mono text-[11px] tabular-nums text-secondary-foreground">{Math.round(v * 100)}%</span>;
+}
+
+export function MiniTimeline({ video, active }: { video: Video; active?: number }) {
+  return (
+    <div className="relative mt-2 h-1 rounded-full bg-muted">
+      {video.moments.map((m, i) => (
+        <div key={i} className={`absolute top-0 h-full rounded-full ${i === active ? "bg-primary" : "bg-foreground/20"}`} style={{ left: `${(m.start / video.duration) * 100}%`, width: `${Math.max(((m.end - m.start) / video.duration) * 100, 1)}%` }} />
+      ))}
+    </div>
+  );
+}
+
+type NavItem = { label: string; icon: typeof SearchIcon; to?: string; soon?: boolean };
+
+const NAV: NavItem[] = [
+  { label: "Search", icon: SearchIcon, to: "/" },
+  { label: "Collections", icon: FolderOpen, soon: true },
+  { label: "Ingestion", icon: Database, to: "/ingest" },
+  { label: "Taxonomy", icon: Shapes, soon: true },
+];
+
+const CRUMBS: Record<string, string> = { "/": "Search", "/search": "Search · Results", "/ingest": "Ingestion" };
+
+export function AppShell({ search: initialSearch, children }: { search?: string; children: React.ReactNode }) {
+  const navigate = useNavigate();
+  const pathname = useLocation().pathname;
+  const [q, setQ] = useState(initialSearch ?? "");
+  const submit = (e: React.FormEvent) => { e.preventDefault(); navigate({ to: "/search", search: { q } }); };
+  const crumb = pathname.startsWith("/video/") ? "Search · Results · Asset" : (CRUMBS[pathname] ?? "Search");
+
+  return (
+    <div className="flex min-h-screen">
+      <aside className="sidebar-gloss sticky top-0 hidden h-screen w-52 shrink-0 flex-col rounded-bl-3xl rounded-tr-3xl border-r border-sidebar-border text-sidebar-foreground md:flex">
+        <div className="border-b border-sidebar-border px-4 py-3">
+          <img src={glazeLogo} alt="Glaze" loading="lazy" width={1514} height={629} className="block h-7 w-auto drop-shadow-[0_0_16px_rgba(236,72,153,0.45)]" />
+          <p className="mt-1 text-[10px] italic leading-snug text-sidebar-foreground/60">The foundation of every frame.</p>
+        </div>
+
+        <nav className="flex-1 space-y-px p-1.5">
+          {NAV.map((n) =>
+            n.to ? (
+              <Link key={n.label} to={n.to} className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-[13px] transition ${n.to === pathname ? "bg-white/12 font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]" : "text-sidebar-foreground/75 hover:bg-white/8 hover:text-sidebar-foreground"}`}>
+                <n.icon className="h-3.5 w-3.5" />{n.label}
+              </Link>
+            ) : (
+              <span key={n.label} className="flex cursor-not-allowed items-center gap-2 rounded-full px-3 py-1.5 text-[13px] text-sidebar-foreground/40">
+                <n.icon className="h-3.5 w-3.5" />{n.label}
+                <span className="ml-auto rounded-sm border border-sidebar-border px-1 font-mono text-[9px] uppercase text-sidebar-foreground/50">soon</span>
+              </span>
+            ),
+          )}
+        </nav>
+        <div className="space-y-2 border-t border-sidebar-border p-3">
+          <div className="rounded-md border border-white/10 bg-white/5 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]">
+            <p className="mb-1.5 text-[9px] uppercase tracking-wider text-sidebar-foreground/55">Powered by</p>
+            <div className="flex items-center justify-center rounded-md bg-white/95 px-2 py-1.5">
+              <img src={twelvelabsLogo.url} alt="TwelveLabs" className="h-3.5 w-auto" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex h-6 w-6 items-center justify-center rounded-sm bg-sidebar-accent font-mono text-[10px] text-sidebar-foreground">JD</div>
+            <div className="min-w-0 leading-tight">
+              <p className="truncate text-xs font-medium text-sidebar-foreground">John Doe</p>
+              <p className="truncate text-[10px] text-sidebar-foreground/60">Brand Studio · Global</p>
+            </div>
+            <Settings className="ml-auto h-3.5 w-3.5 text-sidebar-foreground/50" />
+          </div>
+        </div>
+      </aside>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border/70 bg-background/70 px-4 py-2 backdrop-blur-xl backdrop-saturate-150 md:px-5">
+          <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">Glaze <span className="text-border">/</span> <span className="text-foreground">{crumb}</span></span>
+          {initialSearch !== undefined && (
+            <form onSubmit={submit} className="search-shell flex max-w-xl flex-1 items-center gap-2 rounded-full px-3 py-1">
+              <SearchIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search moments in natural language…" className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground" />
+              <kbd className="hidden rounded-sm border border-border bg-muted px-1 font-mono text-[10px] text-muted-foreground sm:block">⏎</kbd>
+            </form>
+          )}
+          <span className="ml-auto hidden rounded-sm border border-border px-1.5 py-px font-mono text-[10px] uppercase tracking-wide text-muted-foreground sm:block">Internal demo</span>
+        </header>
+        <div className="flex-1">{children}</div>
+        <footer className="flex items-center gap-4 border-t bg-muted/50 px-4 py-1.5 font-mono text-[10px] text-muted-foreground md:px-5">
+          <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-chart-2" />Index healthy</span>
+          <span>18,420 assets · 1.2M moments</span>
+          <span className="hidden sm:inline">Last sync 04:12 UTC</span>
+          <span className="ml-auto">pilot · sample data</span>
+        </footer>
+      </div>
+    </div>
+  );
+}

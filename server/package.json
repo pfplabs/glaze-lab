@@ -1,0 +1,12 @@
+{
+  "name": "glaze-server",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "ingest": "node cli/ingest.js",
+    "test": "node --test"
+  }
+}

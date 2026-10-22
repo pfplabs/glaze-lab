@@ -1,0 +1,54 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+.output
+.vinxi
+.tanstack/**
+.nitro
+*.local
+coverage
+
+# Secrets. .env.example is the only env file that belongs in git.
+.env
+.env.*
+!.env.example
+credentials.json
+*.pem
+
+# Local ingest state. The synthetic catalog in fixtures/ stays tracked.
+data/
+
+# Later infrastructure state.
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# The Lovable export. The unpacked app is the source of truth.
+.lovable
+.lovable/*
+disposable-resources/*.zip
+disposable-resources/*
+
+# Wrangler / Cloudflare
+.wrangler/
+.dev.vars
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
