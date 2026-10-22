@@ -10,12 +10,20 @@ Proof of concept for moment search over Glaze marketing video. The screens are t
 
 ## UI
 
+In one terminal:
+
+```sh
+node server/src/server.js
+```
+
+In another:
+
 ```sh
 bun install
 bun run dev
 ```
 
-Open the URL Vite prints. Try an example query, open a moment, and use the player. That player is still a timer on a colored frame.
+Open the URL Vite prints. The top bar lists the indexes on the account, plus `sample_social_media`, which is selected by default. Add files stays off for that index and for any other index this app did not create. Creating an index from the bar calls TwelveLabs, records the id locally, and is the only way a video can be uploaded. Search still uses the six fixture videos. Enrichment does not run yet. The player is still a timer on a colored frame.
 
 ## Local ingest
 
@@ -27,6 +35,15 @@ node server/cli/ingest.js --show <jobId>
 ```
 
 The command copies the file under `data/uploads/` and writes `data/jobs/<jobId>.json`. `data/` is gitignored. A second run of the same bytes prints `"duplicate": true` and does not create another job. Nothing is uploaded.
+
+`ingest-assets/` holds sample videos for a newly created index. Point the ingest command at them to simulate a drop without a production file:
+
+```sh
+node server/cli/ingest.js ingest-assets/ingest-sample-1.mp4 --campaign "Second Skin SS26"
+node server/cli/ingest.js ingest-assets/ingest-sample-2.mp4 --campaign "Second Skin SS26"
+node server/cli/ingest.js ingest-assets/ingest-sample-3.mp4 --campaign "Second Skin SS26"
+node server/cli/ingest.js ingest-assets/false-asset.mp4 --campaign "Second Skin SS26"
+```
 
 ```sh
 node --test server/test/ingest.test.js

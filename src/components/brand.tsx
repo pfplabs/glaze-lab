@@ -1,8 +1,8 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Database, FolderOpen, Play, Search as SearchIcon, Settings, Shapes } from "lucide-react";
 import { fmt, type Video } from "@/lib/library";
-import twelvelabsLogo from "@/assets/twelvelabs-logo.png.asset.json";
+import twelvelabsLogo from "@/assets/twelvelabs-logo.png";
 import glazeLogo from "@/assets/glaze-logo-white.png";
 
 export function Chip({ on, children, onClick }: { on: boolean; children: React.ReactNode; onClick: () => void }) {
@@ -47,6 +47,118 @@ const NAV: NavItem[] = [
 
 const CRUMBS: Record<string, string> = { "/": "Search", "/search": "Search · Results", "/ingest": "Ingestion" };
 
+type ListedIndex = { id: string; name: string };
+
+function noteFor(selected: { name?: string | null; acceptsVideos?: boolean }) {
+  return selected.acceptsVideos ? selected.name ?? "" : "uploads are off for this index";
+}
+
+function IndexBanner() {
+  const [indexes, setIndexes] = useState<ListedIndex[]>([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [name, setName] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = async () => {
+    const response = await fetch("/api/indexes");
+    if (!response.ok) throw new Error("index request failed");
+    const body = (await response.json()) as { indexes: ListedIndex[]; selected: { id: string | null; name: string | null; acceptsVideos: boolean } };
+    setIndexes(body.indexes);
+    setSelectedId(body.selected.id ?? "");
+    setNote(noteFor(body.selected));
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    load().catch(() => {
+      if (!cancelled) setNote("API not running");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const choose = async (id: string) => {
+    if (!id) return;
+    setBusy(true);
+    try {
+      const response = await fetch("/api/index", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const body = (await response.json()) as { id?: string; name?: string; acceptsVideos?: boolean; message?: string };
+      if (!response.ok) {
+        setNote(body.message ?? "That index cannot be selected.");
+        return;
+      }
+      setSelectedId(body.id ?? id);
+      setNote(noteFor(body));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const create = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setBusy(true);
+    try {
+      const response = await fetch("/api/indexes", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      const body = (await response.json()) as { message?: string };
+      if (!response.ok) {
+        setNote(body.message ?? "Could not create the index.");
+        return;
+      }
+      setName("");
+      await load();
+    } catch {
+      setNote("API not running");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="sticky top-0 z-30 flex h-10 items-center gap-3 border-b border-white/10 bg-primary px-4 font-mono text-[11px] text-primary-foreground md:px-5">
+      <span className="uppercase tracking-widest text-primary-foreground/75">Selected index</span>
+      <select
+        aria-label="Selected index"
+        value={selectedId}
+        disabled={busy || indexes.length === 0}
+        onChange={(event) => choose(event.target.value)}
+        className="max-w-[240px] rounded-sm border border-white/20 bg-white/15 px-1.5 py-0.5 text-[11px] text-primary-foreground outline-none disabled:opacity-80"
+      >
+        {indexes.length === 0 && <option value="">No indexes</option>}
+        {indexes.map((index) => (
+          <option key={index.id} value={index.id} className="text-foreground">
+            {index.name}
+          </option>
+        ))}
+      </select>
+      <form onSubmit={create} className="flex items-center gap-1.5">
+        <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="Name a new index"
+          aria-label="New index name"
+          className="w-36 rounded-sm border border-white/20 bg-white/15 px-1.5 py-0.5 text-[11px] outline-none placeholder:text-primary-foreground/55"
+        />
+        <button type="submit" disabled={busy || !name.trim()} className="rounded-sm bg-white/20 px-1.5 py-0.5 uppercase tracking-wide disabled:opacity-50">
+          Create
+        </button>
+      </form>
+      <span className="ml-auto truncate text-primary-foreground/80">{note}</span>
+    </div>
+  );
+}
+
 export function AppShell({ search: initialSearch, children }: { search?: string; children: React.ReactNode }) {
   const navigate = useNavigate();
   const pathname = useLocation().pathname;
@@ -55,8 +167,10 @@ export function AppShell({ search: initialSearch, children }: { search?: string;
   const crumb = pathname.startsWith("/video/") ? "Search · Results · Asset" : (CRUMBS[pathname] ?? "Search");
 
   return (
-    <div className="flex min-h-screen">
-      <aside className="sidebar-gloss sticky top-0 hidden h-screen w-52 shrink-0 flex-col rounded-bl-3xl rounded-tr-3xl border-r border-sidebar-border text-sidebar-foreground md:flex">
+    <div className="flex min-h-screen flex-col">
+      <IndexBanner />
+      <div className="flex min-h-0 flex-1">
+      <aside className="sidebar-gloss sticky top-10 hidden h-[calc(100vh-2.5rem)] w-52 shrink-0 flex-col rounded-bl-3xl rounded-tr-3xl border-r border-sidebar-border text-sidebar-foreground md:flex">
         <div className="border-b border-sidebar-border px-4 py-3">
           <img src={glazeLogo} alt="Glaze" loading="lazy" width={1514} height={629} className="block h-7 w-auto drop-shadow-[0_0_16px_rgba(236,72,153,0.45)]" />
           <p className="mt-1 text-[10px] italic leading-snug text-sidebar-foreground/60">The foundation of every frame.</p>
@@ -79,8 +193,8 @@ export function AppShell({ search: initialSearch, children }: { search?: string;
         <div className="space-y-2 border-t border-sidebar-border p-3">
           <div className="rounded-md border border-white/10 bg-white/5 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]">
             <p className="mb-1.5 text-[9px] uppercase tracking-wider text-sidebar-foreground/55">Powered by</p>
-            <div className="flex items-center justify-center rounded-md bg-white/95 px-2 py-1.5">
-              <img src={twelvelabsLogo.url} alt="TwelveLabs" className="h-3.5 w-auto" />
+            <div className="mx-auto flex w-fit items-center justify-center rounded-md bg-white px-1.5 py-1">
+              <img src={twelvelabsLogo} alt="TwelveLabs" width={1024} height={206} className="h-4 w-auto" />
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -94,7 +208,7 @@ export function AppShell({ search: initialSearch, children }: { search?: string;
         </div>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border/70 bg-background/70 px-4 py-2 backdrop-blur-xl backdrop-saturate-150 md:px-5">
+        <header className="sticky top-10 z-10 flex items-center gap-3 border-b border-border/70 bg-background/70 px-4 py-2 backdrop-blur-xl backdrop-saturate-150 md:px-5">
           <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">Glaze <span className="text-border">/</span> <span className="text-foreground">{crumb}</span></span>
           {initialSearch !== undefined && (
             <form onSubmit={submit} className="search-shell flex max-w-xl flex-1 items-center gap-2 rounded-full px-3 py-1">
@@ -112,6 +226,7 @@ export function AppShell({ search: initialSearch, children }: { search?: string;
           <span className="hidden sm:inline">Last sync 04:12 UTC</span>
           <span className="ml-auto">pilot · sample data</span>
         </footer>
+      </div>
       </div>
     </div>
   );

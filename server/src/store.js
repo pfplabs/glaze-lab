@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -27,7 +27,7 @@ function hashIndexPath() {
   return path.join(dataDir(), "hash-index.json");
 }
 
-function exclusive(fn) {
+export function withLock(fn) {
   const run = writeChain.then(fn, fn);
   writeChain = run.then(
     () => {},
@@ -65,8 +65,37 @@ export async function findJobIdByHash(hash) {
   }
 }
 
+export async function listJobs() {
+  let names;
+  try {
+    names = await readdir(path.join(dataDir(), "jobs"));
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
+  const jobs = [];
+  for (const name of names) {
+    if (!name.endsWith(".json")) continue;
+    const job = await readJob(name.slice(0, -".json".length));
+    if (job) jobs.push(job);
+  }
+  jobs.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  return jobs;
+}
+
+export function updateJob(id, mutate) {
+  return withLock(async () => {
+    const current = await readJob(id);
+    if (!current) return null;
+    const next = await mutate(current);
+    next.updatedAt = new Date().toISOString();
+    await writeJsonAtomic(jobPath(id), next);
+    return next;
+  });
+}
+
 export function saveNewJob(job) {
-  return exclusive(async () => {
+  return withLock(async () => {
     const existing = await findJobIdByHash(job.contentHash);
     if (existing) {
       const prior = await readJob(existing);
