@@ -87,15 +87,15 @@ The home-page counts mix two sources. The SKU total is the local catalog (`fixtu
 
 Taken on the `lab-sample-v2` index. Your index name and files will differ. The screens are the same.
 
-![Home page with example queries and library counts](docs/images/home.png)
+![Home page with example queries and library counts](docs/images/home-lab-sample.png)
 
-![Search results for a Fenty Beauty Gloss Bomb close-up, with the time range, product chips, and model confidence beside rank](docs/images/search-moments.png)
+![Search results for a Fenty Beauty Gloss Bomb close-up, with the time range, product chips, and model confidence beside rank](docs/images/search-gloss-bomb.png)
 
-![The same results while the first thumbnail plays the matched span](docs/images/search-preview.png)
+![The same results while the first thumbnail plays the matched span](docs/images/search-gloss-bomb-preview.png)
 
-![The moment opened in the player, seeked to the hit, with enrichment observations](docs/images/video.png)
+![The moment opened in the player, seeked to the hit, with enrichment observations](docs/images/video-gloss-bomb.png)
 
-![Ingestion queue after Marengo indexing and Pegasus enrichment](docs/images/ingest.png)
+![Ingestion queue after Marengo indexing and Pegasus enrichment](docs/images/ingest-queue.png)
 
 ## 🧪 Tests
 
