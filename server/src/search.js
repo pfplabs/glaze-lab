@@ -126,12 +126,24 @@ function clipRows(result) {
 }
 
 function productOf(observation) {
-  if (!observation) return { status: null, sku: null, line: null };
+  if (!observation) return { status: null, sku: null, line: null, name: null, reason: null };
   const product = observation.product ?? {};
   return {
     status: product.status ?? "unresolved",
     sku: product.sku ?? null,
     line: product.line ?? null,
+    name: observation.productName || null,
+    reason: product.reason ?? null,
+  };
+}
+
+function provenanceOf(observation) {
+  const source = observation?.provenance;
+  if (!source) return null;
+  return {
+    modelName: source.modelName ?? null,
+    textSource: source.textSource ?? null,
+    schema: source.schema ?? null,
   };
 }
 
@@ -145,15 +157,19 @@ function hitFromJob(job, observation, extra) {
     start: extra.start ?? observation?.startTime ?? null,
     end: extra.end ?? observation?.endTime ?? null,
     rank: extra.rank ?? null,
+    confidence: typeof observation?.modelConfidence === "number" ? observation.modelConfidence : (observation ? null : undefined),
     transcription: extra.transcription ?? "",
     thumbnailUrl: extra.thumbnailUrl ?? null,
     product: productOf(observation),
+    observedLine: observation?.productLine ?? "",
     action: observation?.action ?? null,
     shot: observation?.shot ?? null,
+    setting: observation?.setting ?? "",
     lighting: observation?.lighting ?? null,
     skinTone: observation?.skinTone ?? "",
     onScreenText: observation?.onScreenText ?? "",
     spokenMention: observation?.spokenMention ?? "",
+    provenance: provenanceOf(observation),
     enrichment: extra.enrichment,
   };
 }
@@ -358,13 +374,16 @@ export async function searchLibrary(client, index, body) {
           rank: row.rank,
           transcription: row.transcription ?? "",
           thumbnailUrl: row.thumbnailUrl ?? null,
-          product: { status: null, sku: null, line: null },
+          product: { status: null, sku: null, line: null, name: null, reason: null },
+          observedLine: "",
           action: null,
           shot: null,
+          setting: "",
           lighting: null,
           skinTone: "",
           onScreenText: "",
           spokenMention: "",
+          provenance: null,
           enrichment: "not_ours",
         };
     if (job && hit.campaign == null && row.userMetadata?.campaign) hit.campaign = row.userMetadata.campaign;
@@ -451,6 +470,7 @@ export async function findLibraryVideo(id) {
     format: job.enrichment?.format?.value ?? null,
     duration: job.durationSeconds,
     enrichmentStatus: job.enrichment?.status ?? "not_started",
+    confidence: null,
     observations: job.enrichment?.status === "ready" ? job.enrichment.observations ?? [] : [],
   };
 }

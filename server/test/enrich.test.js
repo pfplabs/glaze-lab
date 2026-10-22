@@ -30,6 +30,7 @@ describe("normalizeEnrichment", () => {
         on_screen_text: "",
         spoken_mention: "tarte cosmetics timeless smoothing primer",
         skin_tone: "medium",
+        confidence: 0.86,
       },
     }), context);
     assert.equal(result.format.value, "tutorial");
@@ -37,6 +38,7 @@ describe("normalizeEnrichment", () => {
     assert.equal(result.observations[0].product.status, "candidate");
     assert.equal(result.observations[0].product.sku, "TARTE-PRIMER");
     assert.equal(result.observations[0].action, "applied");
+    assert.equal(result.observations[0].modelConfidence, 0.86);
     assert.equal(result.observations[0].provenance.textSource, "model");
     assert.equal(result.observations[0].provenance.modelName, "pegasus1.6");
   });
@@ -55,6 +57,7 @@ describe("normalizeEnrichment", () => {
         on_screen_text: "NYX Brow Power Powder | Micro Brow Pencil in Ash Brown",
         spoken_mention: "NYX Micro Brow Pencil in Ash Brown",
         skin_tone: "light",
+        confidence: 0.74,
       },
     }), context);
     assert.equal(result.observations[0].product.status, "candidate");
@@ -75,10 +78,33 @@ describe("normalizeEnrichment", () => {
         on_screen_text: "crimson",
         spoken_mention: "",
         skin_tone: "",
+        confidence: 0.2,
       },
     }), context);
     assert.equal(result.observations[0].product.status, "unresolved");
     assert.equal(result.observations[0].product.sku, null);
+  });
+
+  it("rejects a percentage in place of a 0 to 1 confidence", async () => {
+    await assert.rejects(
+      () => normalizeEnrichment(payload({
+        start_time: 1,
+        end_time: 3,
+        metadata: {
+          product_name: "",
+          product_line: "",
+          shot: "close-up",
+          action: "shown",
+          setting: "",
+          lighting: "studio",
+          on_screen_text: "",
+          spoken_mention: "",
+          skin_tone: "",
+          confidence: 86,
+        },
+      }), context),
+      (error) => error.code === "schema_invalid",
+    );
   });
 
   it("rejects a segment without metadata", async () => {

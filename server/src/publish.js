@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { EnrichmentError, normalizeEnrichment } from "./enrich.js";
+import { ENRICHMENT_SCHEMA, EnrichmentError, normalizeEnrichment } from "./enrich.js";
 import { findCreatedIndex, requireOwnedIndex } from "./index-selection.js";
 import { listJobs, dataDir, readJob, updateJob } from "./store.js";
 import { providerError, resumeEnrichment, resumeIndex } from "./twelvelabs.js";
@@ -15,6 +15,41 @@ export function publishJob(jobId, client, options = {}) {
   running.add(jobId);
   const work = publish(jobId, client, options).finally(() => running.delete(jobId));
   return work;
+}
+
+// Start a new Pegasus task for an already indexed asset. The previous observations
+// stay in place if the new task fails or the result does not match the schema.
+export async function resegmentJob(jobId, client, options = {}) {
+  const current = await readJob(jobId);
+  if (!current) {
+    const error = new Error("No job with that id.");
+    error.code = "missing_job";
+    throw error;
+  }
+  const assetId = current.providers?.twelvelabs?.assetId;
+  if (current.stage !== "indexed" || !assetId) {
+    const error = new Error("Only an indexed video can be segmented again.");
+    error.code = "not_indexed";
+    throw error;
+  }
+  if (current.enrichment?.schema === ENRICHMENT_SCHEMA && current.enrichment?.status === "ready") return current;
+  const previous = current.enrichment;
+  await updateJob(jobId, (job) => {
+    job.enrichment = { ...(job.enrichment ?? {}), status: "pending", taskId: null };
+    return job;
+  });
+  const result = await publishJob(jobId, client, options);
+  if (result?.enrichment?.status === "ready" && result.enrichment.schema === ENRICHMENT_SCHEMA) return result;
+  return updateJob(jobId, (job) => {
+    job.enrichment = {
+      ...previous,
+      rejected: {
+        taskId: result?.enrichment?.taskId ?? null,
+        error: result?.enrichment?.error ?? result?.error ?? null,
+      },
+    };
+    return job;
+  });
 }
 
 export async function resumeOpenEnrichment(client) {

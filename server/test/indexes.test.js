@@ -65,6 +65,7 @@ function fakeClient() {
                     on_screen_text: "",
                     spoken_mention: "tarte cosmetics timeless smoothing primer",
                     skin_tone: "medium",
+                    confidence: 0.86,
                   },
                 }],
               }),

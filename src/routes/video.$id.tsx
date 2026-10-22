@@ -147,6 +147,12 @@ function FixtureVideo({ video }: { video: Video }) {
   );
 }
 
+type LiveProvenance = {
+  modelName: string | null;
+  textSource: string | null;
+  schema?: string | null;
+};
+
 type LiveObservation = {
   startTime: number;
   endTime: number;
@@ -158,7 +164,10 @@ type LiveObservation = {
   onScreenText: string;
   spokenMention: string;
   productName: string;
+  productLine: string;
   product: { status: string; sku: string | null; line: string | null; reason?: string };
+  modelConfidence?: number | null;
+  provenance?: LiveProvenance | null;
 };
 
 type LiveVideoRecord = {
@@ -167,8 +176,28 @@ type LiveVideoRecord = {
   format: string | null;
   duration: number;
   enrichmentStatus: string;
+  confidence: number | null;
   observations: LiveObservation[];
 };
+
+function modelLabel(name: string | null | undefined) {
+  if (!name) return null;
+  if (name === "pegasus1.6") return "Pegasus 1.6";
+  return name;
+}
+
+function evidenceLine(provenance: LiveProvenance | null | undefined, score: number | null | undefined) {
+  const model = modelLabel(provenance?.modelName);
+  const source = provenance?.textSource === "model" ? "model-derived" : provenance?.textSource;
+  const shown = typeof score === "number" ? `model confidence ${score.toFixed(2)}` : null;
+  return [model, source, shown].filter(Boolean).join(" · ");
+}
+
+function confidenceLabel(status: string | null | undefined, reason: string | null | undefined) {
+  if (!status) return null;
+  const name = status === "line_only" ? "line only" : status;
+  return reason ? `${name} · ${reason}` : name;
+}
 
 function LiveVideo({ id }: { id: string }) {
   const { q, start } = Route.useSearch();
@@ -283,10 +312,15 @@ function LiveVideo({ id }: { id: string }) {
             </div>
             {live && (
               <div className="mt-4 rounded-sm border border-border bg-card p-4 text-sm">
-                <p>{live.shot} · {live.action} · {live.lighting} light</p>
-                {live.setting && <p className="mt-1 text-muted-foreground">{live.setting}</p>}
+                <p className="font-medium">{live.productName || live.product.line || live.product.sku || "No catalog match"}</p>
+                <p className="mt-1 text-muted-foreground">{[live.product.sku, live.product.line].filter(Boolean).join(" · ") || "No SKU or product line"}</p>
+                {confidenceLabel(live.product.status, live.product.reason) && <p className="mt-1 text-muted-foreground">Confidence · {confidenceLabel(live.product.status, live.product.reason)}</p>}
+                <p className="mt-2">{[live.shot, live.action === "applied" ? "application" : live.action, live.lighting && live.lighting !== "unknown" ? `${live.lighting} light` : null].filter(Boolean).join(" · ")}</p>
+                {live.setting && <p className="mt-1 text-muted-foreground">Setting · {live.setting}</p>}
+                {live.productLine && live.productLine !== live.product.line && live.productLine !== live.productName && <p className="mt-1 text-muted-foreground">Line · {live.productLine}</p>}
                 {live.onScreenText && <p className="mt-2 font-mono text-xs">On screen · {live.onScreenText}</p>}
                 {live.spokenMention && <p className="mt-1 text-xs italic text-muted-foreground">Spoken · {live.spokenMention}</p>}
+                <p className="mt-2 text-[11px] text-muted-foreground">{evidenceLine(live.provenance, live.modelConfidence)}</p>
               </div>
             )}
           </div>
@@ -307,7 +341,20 @@ function LiveVideo({ id }: { id: string }) {
                   <button key={index} onClick={() => seekTo(item.startTime, index)} className={`w-full rounded-sm border p-3 text-left ${index === sel ? "border-primary bg-accent/40" : "border-border"}`}>
                     <p className="font-mono text-xs text-primary">{fmt(item.startTime)} – {fmt(item.endTime)}</p>
                     <p className="text-sm font-medium">{item.productName || item.product.line || item.product.sku || "No catalog match"}</p>
-                    <p className="mt-1 text-[11px] text-muted-foreground">{[item.product.sku ?? "no catalog match", item.action, item.shot, item.skinTone ? `${item.skinTone} skin` : ""].filter(Boolean).join(" · ")}</p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">{[
+                      item.product.sku,
+                      item.product.line,
+                      item.productLine && item.productLine !== item.product.line ? `line ${item.productLine}` : null,
+                      item.action === "applied" ? "application" : item.action,
+                      item.shot,
+                      item.lighting && item.lighting !== "unknown" ? `${item.lighting} light` : null,
+                      item.setting ? `setting ${item.setting}` : null,
+                      item.skinTone ? `${item.skinTone} skin` : null,
+                    ].filter(Boolean).join(" · ") || "No SKU or product line"}</p>
+                    {confidenceLabel(item.product.status, item.product.reason) && <p className="mt-1 text-[11px] text-muted-foreground">Confidence · {confidenceLabel(item.product.status, item.product.reason)}</p>}
+                    {item.onScreenText && <p className="mt-1 font-mono text-[11px] text-muted-foreground">On screen · {item.onScreenText}</p>}
+                    {item.spokenMention && <p className="mt-1 text-[11px] italic text-muted-foreground">Spoken · {item.spokenMention}</p>}
+                    <p className="mt-1 text-[10px] text-muted-foreground">{evidenceLine(item.provenance, item.modelConfidence)}</p>
                   </button>
                 ))}
               </div>

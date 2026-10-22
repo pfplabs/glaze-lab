@@ -2,7 +2,7 @@ import { matchObservationProduct } from "./catalog.js";
 
 // One Pegasus 1.6 time_based_metadata request. The catalog is applied later, in this file.
 // https://docs.twelvelabs.io/v1.3/docs/get-started/quickstart/segment-videos
-export const ENRICHMENT_SCHEMA = "glaze-observe-1";
+export const ENRICHMENT_SCHEMA = "glaze-observe-2";
 export const SEGMENT_MODEL = "pegasus1.6";
 
 const FORMAT_VALUES = ["tutorial", "demo", "ad", "before_after", "other"];
@@ -36,6 +36,11 @@ export const SEGMENT_DEFINITIONS = [
       { name: "on_screen_text", type: "string", description: "Text read from the screen in this moment. Empty when there is none." },
       { name: "spoken_mention", type: "string", description: "What is said about the product in this moment. Empty when nobody names it." },
       { name: "skin_tone", type: "string", description: "Skin tone only when a person is visible. Empty when no person is visible." },
+      {
+        name: "confidence",
+        type: "number",
+        description: "How sure this observation is, as a decimal from 0 to 1. 1 means the product name, the action, and the text are clear. 0 means no product can be identified. Return 0.5 when the product is visible but the name is incomplete. Do not return a percentage.",
+      },
     ],
   },
 ];
@@ -116,6 +121,7 @@ async function readObservation(segment, index, context) {
     onScreenText,
     spokenMention,
     skinTone: textValue(metadata.skin_tone, `observation[${index}].skin_tone`),
+    modelConfidence: confidenceValue(metadata.confidence, `observation[${index}].confidence`),
     product,
     provenance: provenance("observation", time, context),
   };
@@ -134,6 +140,13 @@ function readTime(segment, definitionId, index) {
 function enumValue(value, allowed, label) {
   if (!allowed.includes(value)) {
     throw new EnrichmentError("schema_invalid", `${label} is not one of the expected values.`);
+  }
+  return value;
+}
+
+function confidenceValue(value, label) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
+    throw new EnrichmentError("schema_invalid", `${label} must be a number from 0 to 1.`);
   }
   return value;
 }

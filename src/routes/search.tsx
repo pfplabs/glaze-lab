@@ -27,15 +27,19 @@ type Hit = {
   start: number | null;
   end: number | null;
   rank: number | null;
+  confidence?: number | null;
   transcription: string;
   thumbnailUrl: string | null;
-  product: { status: string | null; sku: string | null; line: string | null };
+  product: { status: string | null; sku: string | null; line: string | null; name?: string | null; reason?: string | null };
+  observedLine?: string;
   action: string | null;
   shot: string | null;
+  setting?: string;
   lighting: string | null;
   skinTone: string;
   onScreenText: string;
   spokenMention: string;
+  provenance?: { modelName: string | null; textSource: string | null; schema: string | null } | null;
   enrichment: string;
 };
 
@@ -279,13 +283,33 @@ function formatLabel(value: string | null) {
 }
 
 function momentLabel(hit: Hit) {
-  const action = hit.action === "applied" ? "applied" : hit.action === "shown" ? "shown" : null;
-  const bits = [hit.shot, action, hit.lighting && hit.lighting !== "unknown" ? `${hit.lighting} light` : null].filter(Boolean);
-  if (hit.product.sku) return `${hit.product.sku}${bits.length ? ` · ${bits.join(", ")}` : ""}`;
-  if (hit.product.line) return `${hit.product.line}${bits.length ? ` · ${bits.join(", ")}` : ""}`;
-  if (bits.length) return bits.join(", ");
+  if (hit.product.name) return hit.product.name;
+  if (hit.product.line) return hit.product.line;
+  if (hit.observedLine) return hit.observedLine;
   if (hit.transcription) return hit.transcription;
   return "Matching moment";
+}
+
+function modelLabel(name: string | null | undefined) {
+  if (name === "pegasus1.6") return "Pegasus 1.6";
+  return name || null;
+}
+
+function confidenceLabel(status: string | null | undefined, reason: string | null | undefined) {
+  if (!status) return null;
+  const name = STATUS_LABEL[status] ?? status;
+  return reason ? `${name} · ${reason}` : name;
+}
+
+function formatScore(value: number | null | undefined) {
+  return typeof value === "number" ? value.toFixed(2) : null;
+}
+
+function evidenceLine(hit: Hit) {
+  if (hit.enrichment !== "joined") return null;
+  const model = modelLabel(hit.provenance?.modelName);
+  const source = hit.provenance?.textSource === "model" ? "model-derived" : hit.provenance?.textSource;
+  return [model, source].filter(Boolean).join(" · ") || null;
 }
 
 function SearchPage() {
@@ -426,8 +450,8 @@ function SearchBody({ q }: { q: string }) {
 
           {view === "moments" ? (
             <div className="overflow-hidden rounded-sm border border-border bg-card">
-              <div className="hidden grid-cols-[112px_88px_1fr_72px] gap-3 border-b border-border bg-muted/60 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground sm:grid">
-                <span>Preview</span><span>Time</span><span>Moment</span><span className="text-right">Rank</span>
+              <div className="hidden grid-cols-[112px_88px_1fr_128px] gap-3 border-b border-border bg-muted/60 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground sm:grid">
+                <span>Preview</span><span>Time</span><span>Moment</span><span className="text-right">Confidence · rank</span>
               </div>
               {hits.map((hit, index) => {
                 const id = hit.videoId ?? "unknown";
@@ -438,22 +462,32 @@ function SearchBody({ q }: { q: string }) {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="truncate text-[13px] font-medium">{momentLabel(hit)}</p>
-                        {hit.product.sku && <span className="rounded-sm border border-border px-1 font-mono text-[10px]">{hit.product.sku}</span>}
+                        {hit.product.sku && <span className="shrink-0 rounded-sm border border-border px-1 font-mono text-[10px]">{hit.product.sku}</span>}
+                        {hit.product.line && hit.product.line !== momentLabel(hit) && <span className="shrink-0 rounded-sm border border-border px-1 text-[10px]">{hit.product.line}</span>}
                       </div>
                       <p className="truncate font-mono text-[11px] text-muted-foreground">{hit.filename ?? id} · {formatLabel(hit.format)} · {hit.campaign ?? "no campaign"}</p>
                       <div className="mt-1 flex flex-wrap items-center gap-1">
-                        {hit.product.status && <span className="rounded-sm bg-muted px-1 py-px text-[10px] text-muted-foreground">{STATUS_LABEL[hit.product.status] ?? hit.product.status}</span>}
+                        {confidenceLabel(hit.product.status, hit.product.reason) && <span className="rounded-sm bg-muted px-1 py-px text-[10px] text-muted-foreground">{confidenceLabel(hit.product.status, hit.product.reason)}</span>}
+                        {hit.shot && <span className="rounded-sm bg-muted px-1 py-px text-[10px] text-muted-foreground">{hit.shot}</span>}
+                        {hit.action && <span className="rounded-sm bg-muted px-1 py-px text-[10px] text-muted-foreground">{hit.action === "applied" ? "application" : hit.action}</span>}
+                        {hit.lighting && hit.lighting !== "unknown" && <span className="rounded-sm bg-muted px-1 py-px text-[10px] text-muted-foreground">{hit.lighting} light</span>}
+                        {hit.setting && <span className="rounded-sm bg-muted px-1 py-px text-[10px] text-muted-foreground">setting · {hit.setting}</span>}
+                        {hit.observedLine && hit.observedLine !== hit.product.line && <span className="rounded-sm bg-muted px-1 py-px text-[10px] text-muted-foreground">line · {hit.observedLine}</span>}
                         {hit.skinTone && <span className="rounded-sm bg-muted px-1 py-px text-[10px] text-muted-foreground">{hit.skinTone} skin</span>}
                         {hit.onScreenText && <span className="rounded-sm bg-muted px-1 py-px font-mono text-[10px] text-muted-foreground">on screen · {hit.onScreenText}</span>}
                         {hit.spokenMention && <span className="rounded-sm bg-muted px-1 py-px text-[10px] text-muted-foreground">spoken · {hit.spokenMention}</span>}
                         {hit.enrichment === "missing" && <span className="rounded-sm bg-muted px-1 py-px text-[10px] text-muted-foreground">enrichment missing</span>}
                         {hit.enrichment === "not_ours" && <span className="rounded-sm bg-muted px-1 py-px text-[10px] text-muted-foreground">not enriched here</span>}
                       </div>
+                      {evidenceLine(hit) && <p className="mt-1 text-[10px] text-muted-foreground">{evidenceLine(hit)}</p>}
                     </div>
-                    <span className="text-right font-mono text-[11px] tabular-nums text-muted-foreground">{hit.rank == null ? "—" : `rank ${hit.rank}`}</span>
+                    <span className="flex items-baseline justify-end gap-2 text-right">
+                      <span className="font-mono text-sm font-medium tabular-nums text-foreground">{formatScore(hit.confidence) ?? "—"}</span>
+                      <span className="font-mono text-[11px] tabular-nums text-muted-foreground">{hit.rank == null ? "—" : `rank ${hit.rank}`}</span>
+                    </span>
                   </>
                 );
-                const className = `grid grid-cols-[112px_1fr_72px] items-center gap-3 px-3 py-2 transition hover:bg-accent/40 sm:grid-cols-[112px_88px_1fr_72px] ${index > 0 ? "border-t border-border" : ""}`;
+                const className = `grid grid-cols-[112px_1fr_128px] items-center gap-3 px-3 py-2 transition hover:bg-accent/40 sm:grid-cols-[112px_88px_1fr_128px] ${index > 0 ? "border-t border-border" : ""}`;
                 return hit.videoId ? (
                   <Link key={`${id}-${hit.start}-${index}`} to="/video/$id" params={{ id: hit.videoId }} search={{ m: 0, q, start: hit.start ?? 0 }} className={className}>{row}</Link>
                 ) : (

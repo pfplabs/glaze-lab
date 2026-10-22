@@ -22,7 +22,7 @@ The search box takes a sentence. These four examples are the ones we keep on the
 
 These rows are moments. Each one is a time range inside a video. Rank is TwelveLabs’ order for this query. It is an ordering, not a confidence score.
 
-The chips are ours. Fenty Gloss is a catalog candidate because the enrichment saw that name on screen and heard it spoken. The format, the close-up, and the studio light come from the same observation.
+The chips are ours. Fenty Gloss is a catalog candidate because the enrichment saw that name on screen and heard it spoken. The same row keeps the product line next to the SKU, the format, the close-up, whether it is shown or applied, the setting, and the studio light. The number beside the rank is the 0-to-1 confidence Pegasus returned for that observation. Rank stays the search order. The catalog chip says whether the name matched one SKU. The line under the chips names Pegasus.
 
 [Hover the first thumbnail until it plays. Hold it through a second or two.]
 

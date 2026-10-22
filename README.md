@@ -97,10 +97,6 @@ Taken on the `lab-sample-v2` index. Your index name and files will differ. The s
 
 ![Ingestion queue after Marengo indexing and Pegasus enrichment](docs/images/ingest.png)
 
-## 🎙️ Recording
-
-A spoken walkthrough of those screens is in [docs/recording-script.md](docs/recording-script.md). Record search, the hover preview, playback, and ingest. Leave Collections and Taxonomy out of the story.
-
 ## 🧪 Tests
 
 Server tests do not call TwelveLabs. They inject a fake client:

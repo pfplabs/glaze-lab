@@ -18,14 +18,20 @@ function observation(start, end, action, sku) {
     action,
     setting: "bathroom",
     lighting: "natural",
-    productName: "",
-    productLine: "",
+    productName: sku ? "Second Skin Foundation" : "",
+    productLine: sku ? "Second Skin" : "",
     onScreenText: "SECOND SKIN",
     spokenMention: "",
     skinTone: "medium",
+    modelConfidence: 0.86,
     product: sku
-      ? { status: "candidate", sku, line: "Second Skin" }
-      : { status: "unresolved", sku: null, line: null },
+      ? { status: "candidate", sku, line: "Second Skin", reason: "catalog alias mentioned" }
+      : { status: "unresolved", sku: null, line: null, reason: "no catalog match" },
+    provenance: {
+      modelName: "pegasus1.6",
+      textSource: "model",
+      schema: "glaze-observe-1",
+    },
   };
 }
 
@@ -139,12 +145,20 @@ describe("search", { concurrency: 1 }, () => {
     const joined = body.hits.find((hit) => hit.start === 1.2);
     const later = body.hits.find((hit) => hit.start === 10);
     assert.equal(joined.product.sku, "SS-FDN-340");
+    assert.equal(joined.product.line, "Second Skin");
+    assert.equal(joined.product.name, "Second Skin Foundation");
     assert.equal(joined.product.status, "candidate");
+    assert.equal(joined.product.reason, "catalog alias mentioned");
+    assert.equal(joined.setting, "bathroom");
     assert.equal(joined.action, "applied");
     assert.equal(joined.rank, 2);
+    assert.equal(joined.confidence, 0.86);
+    assert.equal(joined.provenance.modelName, "pegasus1.6");
+    assert.equal(joined.provenance.textSource, "model");
     assert.equal(joined.thumbnailUrl, "https://stream.example/thumb.jpg");
     assert.equal(later.thumbnailUrl, "https://stream.example/asset-thumb.jpg");
-    assert.equal(joined.confidence, undefined);
+    assert.equal(later.confidence, undefined);
+    assert.equal(later.provenance, null);
     assert.equal(later.product.sku, null);
     assert.equal(later.enrichment, "missing");
     assert.equal(body.hits.some((hit) => hit.videoId === "indexed_other"), true);
@@ -264,6 +278,8 @@ describe("search", { concurrency: 1 }, () => {
     assert.equal(body.filename, "foundation.mp4");
     assert.equal(body.observations[0].product.sku, "SS-FDN-340");
     assert.equal(body.observations[0].confidence, undefined);
+    assert.equal(body.confidence, null);
+    assert.equal(body.observations[0].provenance.modelName, "pegasus1.6");
     const stream = await fetch(`${base}/api/videos/indexed_1/stream`);
     const streamBody = await stream.json();
     assert.equal(stream.status, 200);
