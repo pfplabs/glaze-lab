@@ -1,5 +1,7 @@
 # Plan
 
+This was the scope before the live TwelveLabs run. The [README](README.md) describes the demo as it works now.
+
 Approved 2026-10-21. Bedrock is out of this pass. No TwelveLabs call until a video and a budget are confirmed.
 
 ## Decisions

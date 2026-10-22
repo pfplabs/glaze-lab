@@ -62,7 +62,7 @@ function Home() {
 
         <form onSubmit={(e) => { e.preventDefault(); run(q); }} className="search-shell mt-4 flex items-center gap-2.5 rounded-full px-4 py-2">
           <Search className="h-4 w-4 shrink-0 text-primary" />
-          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="e.g. close-ups of foundation application in natural light" className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
+          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="e.g. close-up of Fenty Beauty Gloss Bomb in a tutorial" className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
           <button className="gloss-btn flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-medium text-white"><Search className="h-3.5 w-3.5" />Search</button>
         </form>
 

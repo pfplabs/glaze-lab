@@ -75,8 +75,8 @@ export const SKUS = Array.from(new Set(VIDEOS.flatMap((v) => v.moments.flatMap((
 export const CAMPAIGNS = Array.from(new Set(VIDEOS.map((v) => v.campaign)));
 
 export const EXAMPLES = [
-  "tutorials featuring a red lipstick for medium skin tone",
-  "close-ups of foundation application with natural lighting",
+  "close-up of Fenty Beauty Gloss Bomb in a tutorial",
+  "close-up of makeup being applied in natural light",
   "videos featuring IT-CC-FAIR across campaigns",
   "moments where a product is being applied, not just shown",
 ];
