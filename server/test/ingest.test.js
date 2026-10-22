@@ -113,20 +113,20 @@ describe("evaluateMedia", { concurrency: 1 }, () => {
 
 describe("resolveProduct", { concurrency: 1 }, () => {
   it("matches a catalog alias to one SKU", async () => {
-    const match = await resolveProduct("Creator holds the Velvet Matte Crimson lipstick");
+    const match = await resolveProduct("Creator holds the Timeless Smoothing Primer");
     assert.equal(match.status, "candidate");
-    assert.equal(match.sku, "VM-LIP-112");
+    assert.equal(match.sku, "TARTE-PRIMER");
   });
 
   it("keeps a product line when the shade is not identified", async () => {
-    const match = await resolveProduct("A Second Skin bottle is on the counter");
+    const match = await resolveProduct("A Veil compact is on the counter");
     assert.equal(match.status, "line_only");
     assert.equal(match.sku, null);
-    assert.equal(match.line, "Second Skin");
+    assert.equal(match.line, "Veil");
   });
 
   it("does not turn a color word into a shade SKU", async () => {
-    const match = await resolveProduct("red lipstick on a medium skin tone");
+    const match = await resolveProduct("ash brown on a light skin tone");
     assert.equal(match.status, "unresolved");
     assert.equal(match.sku, null);
   });

@@ -1,62 +1,132 @@
 {
   "synthetic": true,
-  "note": "Hand-written demo catalog for the Glaze proof of concept. These are not the customer's 10,000 SKUs.",
+  "note": "Products named in the Teach Me Beauty everyday-look video. These are not the customer's 10,000 SKUs. A shade word on its own is not a SKU.",
   "products": [
     {
-      "id": "VM-LIP-112",
-      "line": "Velvet Matte",
-      "name": "Velvet Matte Lipstick",
-      "shade": "Crimson",
-      "category": "makeup",
-      "aliases": ["velvet matte lipstick", "velvet matte crimson", "crimson 112"]
-    },
-    {
-      "id": "SS-FDN-210",
-      "line": "Second Skin",
-      "name": "Second Skin Foundation",
-      "shade": "210",
-      "category": "makeup",
-      "aliases": ["second skin 210"]
-    },
-    {
-      "id": "SS-FDN-340",
-      "line": "Second Skin",
-      "name": "Second Skin Foundation",
-      "shade": "340 Warm",
-      "category": "makeup",
-      "aliases": ["second skin 340", "second skin 340 warm"]
-    },
-    {
-      "id": "SS-FDN-510",
-      "line": "Second Skin",
-      "name": "Second Skin Foundation",
-      "shade": "510",
-      "category": "makeup",
-      "aliases": ["second skin 510"]
-    },
-    {
-      "id": "HY-SKN-020",
-      "line": "Hydra Glow",
-      "name": "Hydra Glow Serum",
-      "shade": null,
-      "category": "skincare",
-      "aliases": ["hydra glow serum", "hydra serum"]
-    },
-    {
-      "id": "BR-HAIR-001",
-      "line": "Bond Repair",
-      "name": "Bond Repair Mask",
-      "shade": null,
-      "category": "haircare",
-      "aliases": ["bond repair mask"]
-    },
-    {
-      "id": "GL-EYE-007",
-      "line": "Night Palette",
-      "name": "Night Palette",
+      "id": "TARTE-PRIMER",
+      "brand": "Tarte Cosmetics",
+      "line": "Timeless Smoothing Primer",
+      "name": "Timeless Smoothing Primer",
       "shade": null,
       "category": "makeup",
-      "aliases": ["night palette"]
+      "aliases": ["timeless smoothing primer"]
+    },
+    {
+      "id": "IT-CC-FAIR",
+      "brand": "IT Cosmetics",
+      "line": "Your Skin But Better",
+      "name": "Your Skin But Better CC+ Cream",
+      "shade": "Fair Light",
+      "category": "makeup",
+      "aliases": ["your skin but better cc+ cream"]
+    },
+    {
+      "id": "CATRICE-005",
+      "brand": "Catrice",
+      "line": "Liquid Camouflage",
+      "name": "Liquid Camouflage High Coverage Concealer",
+      "shade": "005",
+      "category": "makeup",
+      "aliases": ["liquid camouflage high coverage concealer", "liquid camouflage concealer"]
+    },
+    {
+      "id": "HG-VEIL",
+      "brand": "Hourglass",
+      "line": "Veil",
+      "name": "Veil Translucent Setting Powder",
+      "shade": "Translucent",
+      "category": "makeup",
+      "aliases": ["veil translucent setting powder"]
+    },
+    {
+      "id": "NYX-BROW-ASH",
+      "brand": "NYX",
+      "line": "Micro Brow",
+      "name": "Micro Brow Pencil",
+      "shade": "Ash Brown",
+      "category": "makeup",
+      "aliases": ["micro brow pencil"]
+    },
+    {
+      "id": "IT-BROW-POWDER",
+      "brand": "IT Cosmetics",
+      "line": "Brow Power",
+      "name": "Brow Power Powder",
+      "shade": null,
+      "category": "makeup",
+      "aliases": ["brow power powder"]
+    },
+    {
+      "id": "IT-OMBRE-WARM",
+      "brand": "IT Cosmetics",
+      "line": "Ombré Radiance",
+      "name": "Ombré Radiance Bronzer",
+      "shade": "Warm Bronze",
+      "category": "makeup",
+      "aliases": ["ombre radiance bronze", "ombre radiance bronzer", "ombré radiance bronzer"]
+    },
+    {
+      "id": "FENTY-INDA",
+      "brand": "Fenty Beauty",
+      "line": "Sun Stalk'r",
+      "name": "Sun Stalk'r Bronzer",
+      "shade": "Inda Sun",
+      "category": "makeup",
+      "aliases": ["sun stalk'r bronzer"]
+    },
+    {
+      "id": "FENTY-GLOSS",
+      "brand": "Fenty Beauty",
+      "line": "Gloss Bomb",
+      "name": "Gloss Bomb",
+      "shade": "Fu$$y",
+      "category": "makeup",
+      "aliases": ["gloss bomb"]
+    },
+    {
+      "id": "UD-ALL-NIGHTER",
+      "brand": "Urban Decay",
+      "line": "All Nighter",
+      "name": "All Nighter Setting Spray",
+      "shade": null,
+      "category": "makeup",
+      "aliases": ["all nighter setting spray"]
+    },
+    {
+      "id": "TF-MASCARA",
+      "brand": "Too Faced",
+      "line": "Better Than Sex",
+      "name": "Better Than Sex Mascara",
+      "shade": null,
+      "category": "makeup",
+      "aliases": ["better than sex mascara"]
+    },
+    {
+      "id": "ALAMAR-BLUSH",
+      "brand": "Alamar Cosmetics",
+      "line": "Colorete",
+      "name": "Colorete Blush Trio",
+      "shade": "Fair / Light",
+      "category": "makeup",
+      "aliases": ["colorette blush trio", "colorete blush trio"]
+    },
+    {
+      "id": "HG-AMBIENT",
+      "brand": "Hourglass",
+      "line": "Ambient Lighting Edit",
+      "name": "Ambient Lighting Edit Unlocked Palette",
+      "shade": null,
+      "category": "makeup",
+      "aliases": ["ambient lighting edit unlocked"]
+    },
+    {
+      "id": "TARTE-BLOOM",
+      "brand": "Tarte Cosmetics",
+      "line": "Tartelette",
+      "name": "Tartelette in Bloom Palette",
+      "shade": null,
+      "category": "makeup",
+      "aliases": ["tartelette in bloom"]
     }
   ]
 }

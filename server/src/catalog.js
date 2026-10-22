@@ -17,8 +17,8 @@ function includesPhrase(text, phrase) {
   return text.includes(phrase.trim().toLowerCase());
 }
 
-// Match an observed name or line against the synthetic catalog.
-// A color word on its own is not a shade. "Crimson" does not become VM-LIP-112.
+// Match an observed name or line against the catalog.
+// A shade word on its own is not a SKU. "Ash Brown" does not become NYX-BROW-ASH.
 export async function resolveProduct(observationText) {
   const catalog = await loadCatalog();
   const text = String(observationText ?? "").toLowerCase();
@@ -60,4 +60,15 @@ export async function resolveProduct(observationText) {
   }
 
   return { status: "unresolved", sku: null, line: null, reason: "no catalog match" };
+}
+
+// The named product wins when it identifies one SKU. On-screen text in the same
+// moment can name a second product, and that must not discard the one being shown.
+export async function matchObservationProduct({ productName, productLine, onScreenText, spokenMention }) {
+  const name = String(productName ?? "");
+  if (name.trim()) {
+    const named = await resolveProduct(name);
+    if (named.status === "candidate") return named;
+  }
+  return resolveProduct([productName, productLine, onScreenText, spokenMention].filter(Boolean).join(" "));
 }

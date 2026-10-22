@@ -6,6 +6,7 @@ import path from "node:path";
 import { ingestLocalFile } from "./ingest.js";
 import { createOwnedIndex, listSelectableIndexes, requireOwnedIndex, selectKnownIndex, selectedIndex } from "./index-selection.js";
 import { publishJob } from "./publish.js";
+import { findLibraryVideo, searchFacets, searchLibrary, streamForLibraryVideo } from "./search.js";
 import { listJobs, updateJob } from "./store.js";
 import { DIRECT_LOCAL_VIDEO_MAX_BYTES } from "./limits.js";
 
@@ -41,6 +42,11 @@ function publicJob(job) {
     error: job.error,
     providerCalls: job.usage?.providerCalls ?? 0,
     duplicate: Boolean(job.duplicate),
+    enrichmentStatus: job.enrichment?.status ?? "not_started",
+    enrichmentFormat: job.enrichment?.format?.value ?? null,
+    observationCount: job.enrichment?.observations?.length ?? 0,
+    enrichmentError: job.enrichment?.error?.message ?? null,
+    searchReady: job.stage === "indexed" && job.enrichment?.status === "ready",
   };
 }
 
@@ -50,6 +56,7 @@ function statusFor(error) {
     case "index_not_ours":
     case "index_unknown":
     case "already_on_another_index":
+    case "stream_unavailable":
       return 409;
     case "missing_api_key":
       return 503;
@@ -60,12 +67,25 @@ function statusFor(error) {
     case "not_a_file":
     case "invalid_name":
     case "invalid_json":
+    case "invalid_query":
+    case "unsupported_filter":
     case "index_name_taken":
       return 400;
     case "body_too_large":
       return 413;
     case "missing_job":
+    case "missing_video":
       return 404;
+    case "provider_auth":
+      return 401;
+    case "index_unreadable":
+    case "provider_forbidden":
+      return 403;
+    case "rate_limited":
+      return 429;
+    case "provider_failed":
+    case "search_unavailable":
+      return 502;
     default:
       return 500;
   }
@@ -160,6 +180,37 @@ export function createApiServer({ client = null, probe } = {}) {
         sendJson(res, 200, await selectKnownIndex(body.id, client));
         return;
       }
+      if (req.method === "GET" && pathname === "/api/library") {
+        const index = await selectedIndex(client);
+        sendJson(res, 200, { index, facets: await searchFacets(index.id) });
+        return;
+      }
+      if (req.method === "POST" && pathname === "/api/search") {
+        const index = await selectedIndex(client);
+        if (!index.id) {
+          const error = new Error("Select an index before searching.");
+          error.code = "index_required";
+          throw error;
+        }
+        const body = await readJson(req);
+        sendJson(res, 200, await searchLibrary(client, index, body));
+        return;
+      }
+      const streamMatch = pathname.match(/^\/api\/videos\/([A-Za-z0-9_-]+)\/stream$/);
+      if (streamMatch && req.method === "GET") {
+        sendJson(res, 200, await streamForLibraryVideo(client, streamMatch[1]));
+        return;
+      }
+      const videoMatch = pathname.match(/^\/api\/videos\/([A-Za-z0-9_-]+)$/);
+      if (videoMatch && req.method === "GET") {
+        const video = await findLibraryVideo(videoMatch[1]);
+        if (!video) {
+          sendJson(res, 404, { error: "missing_video", message: "No local record for that video." });
+          return;
+        }
+        sendJson(res, 200, video);
+        return;
+      }
       if (req.method === "GET" && pathname === "/api/ingestions") {
         const jobs = await listJobs();
         sendJson(res, 200, { jobs: jobs.map(publicJob) });
@@ -177,14 +228,19 @@ export function createApiServer({ client = null, probe } = {}) {
         return;
       }
       if (jobMatch && req.method === "POST" && jobMatch[2] === "/retry") {
-        const owned = await requireOwnedIndex(client);
         const jobs = await listJobs();
         const job = jobs.find((item) => item.id === jobMatch[1]);
         if (!job) {
           sendJson(res, 404, { error: "missing_job", message: "No job with that id." });
           return;
         }
-        if (job.providers.twelvelabs.indexId && job.providers.twelvelabs.indexId !== owned.id && job.stage === "indexed") {
+        if (job.stage === "indexed" && job.providers.twelvelabs.indexId) {
+          sendJson(res, job.enrichment?.status === "ready" ? 200 : 202, publicJob(job));
+          if (job.enrichment?.status !== "ready") track(publishJob(job.id, client));
+          return;
+        }
+        const owned = await requireOwnedIndex(client);
+        if (job.providers.twelvelabs.indexId && job.providers.twelvelabs.indexId !== owned.id) {
           sendJson(res, 409, {
             error: "already_on_another_index",
             message: "This file was already indexed on a different index created here.",

@@ -77,7 +77,7 @@ export const CAMPAIGNS = Array.from(new Set(VIDEOS.map((v) => v.campaign)));
 export const EXAMPLES = [
   "tutorials featuring a red lipstick for medium skin tone",
   "close-ups of foundation application with natural lighting",
-  "videos featuring SS-FDN-340 across campaigns",
+  "videos featuring IT-CC-FAIR across campaigns",
   "moments where a product is being applied, not just shown",
 ];
 

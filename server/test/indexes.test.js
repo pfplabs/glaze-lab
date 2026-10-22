@@ -39,6 +39,40 @@ function fakeClient() {
         },
       },
     },
+    analyzeAsync: {
+      tasks: {
+        async create(request) {
+          calls.push(["analyze.create", request.video.assetId, request.modelName, request.analysisMode]);
+          return { taskId: "task_1", status: "processing" };
+        },
+        async retrieve() {
+          calls.push("analyze.retrieve");
+          return {
+            status: "ready",
+            result: {
+              data: JSON.stringify({
+                format: [{ start_time: 0, end_time: 12, metadata: { format: "tutorial" } }],
+                observation: [{
+                  start_time: 1,
+                  end_time: 4,
+                  metadata: {
+                    product_name: "Timeless Smoothing Primer",
+                    product_line: "Tarte Cosmetics",
+                    shot: "close-up",
+                    action: "applied",
+                    setting: "bathroom",
+                    lighting: "natural",
+                    on_screen_text: "",
+                    spoken_mention: "tarte cosmetics timeless smoothing primer",
+                    skin_tone: "medium",
+                  },
+                }],
+              }),
+            },
+          };
+        },
+      },
+    },
     assets: {
       async create(request) {
         request.file?.destroy?.();
@@ -181,8 +215,21 @@ describe("indexes and ingest", { concurrency: 1 }, () => {
     assert.equal(jobs[0].assetId, "asset_1");
     assert.equal(jobs[0].indexedAssetId, "indexed_1");
     assert.equal(jobs[0].campaign, "Second Skin");
+    assert.equal(jobs[0].enrichmentStatus, "ready");
+    assert.equal(jobs[0].enrichmentFormat, "tutorial");
+    assert.equal(jobs[0].observationCount, 1);
+    assert.equal(jobs[0].searchReady, true);
     assert.ok(jobs[0].providerCalls >= 4);
     assert.equal(client.calls.filter((call) => call === "assets.create").length, 1);
+    assert.equal(client.calls.filter((call) => Array.isArray(call) && call[0] === "analyze.create").length, 1);
+    const indexedAt = client.calls.findIndex((call) => call === "indexedAssets.retrieve");
+    const analyzeAt = client.calls.findIndex((call) => Array.isArray(call) && call[0] === "analyze.create");
+    assert.ok(indexedAt >= 0 && analyzeAt > indexedAt);
+
+    const saved = JSON.parse(await (await import("node:fs/promises")).readFile(path.join(process.env.GLAZE_DATA_DIR, "jobs", `${jobs[0].id}.json`), "utf8"));
+    assert.equal(saved.enrichment.observations[0].product.status, "candidate");
+    assert.equal(saved.enrichment.observations[0].product.sku, "TARTE-PRIMER");
+    assert.equal(typeof saved.enrichment.raw, "string");
 
     const again = await fetch(`${base}/api/ingestions?name=clip.mp4`, {
       method: "POST",
@@ -191,5 +238,6 @@ describe("indexes and ingest", { concurrency: 1 }, () => {
     assert.equal(again.status, 200);
     await server.whenIdle();
     assert.equal(client.calls.filter((call) => call === "assets.create").length, 1);
+    assert.equal(client.calls.filter((call) => Array.isArray(call) && call[0] === "analyze.create").length, 1);
   });
 });

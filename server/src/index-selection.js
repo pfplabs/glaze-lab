@@ -133,6 +133,22 @@ export async function listSelectableIndexes(client) {
   };
 }
 
+export async function findCreatedIndex(id) {
+  if (!id || id === SAMPLE_SOCIAL_INDEX.id) {
+    const error = new Error("This index was not created here, so videos cannot be added to it.");
+    error.code = "index_not_ours";
+    throw error;
+  }
+  const registry = await readRegistry();
+  const owned = registry.indexes.find((index) => index.id === id) ?? null;
+  if (!owned) {
+    const error = new Error("This index was not created here, so videos cannot be added to it.");
+    error.code = "index_not_ours";
+    throw error;
+  }
+  return owned;
+}
+
 export async function requireOwnedIndex(client) {
   const { registry, selected } = await resolveSelection(client);
   if (!selected) {

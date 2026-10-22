@@ -1,20 +1,24 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useRef, useState } from "react";
+import Hls from "hls.js";
 import { ArrowLeft, Eye, Mic, Pause, Play, Type } from "lucide-react";
-import { VIDEOS, fmt } from "@/lib/library";
+import { VIDEOS, fmt, type Video } from "@/lib/library";
 import { AppShell, Score } from "@/components/brand";
 
 export const Route = createFileRoute("/video/$id")({
-  validateSearch: (s: Record<string, unknown>) => ({ m: Number(s["m"]) || 0, q: typeof s["q"] === "string" ? s["q"] : "" }),
-  loader: ({ params }) => {
-    const video = VIDEOS.find((v) => v.id === params.id);
-    if (!video) throw notFound();
-    return video;
-  },
+  validateSearch: (s: Record<string, unknown>) => ({
+    m: Number(s["m"]) || 0,
+    q: typeof s["q"] === "string" ? s["q"] : "",
+    start: Number(s["start"]) || 0,
+  }),
+  loader: ({ params }) => ({
+    fixture: VIDEOS.find((v) => v.id === params.id) ?? null,
+    id: params.id,
+  }),
   head: ({ loaderData }) => ({
     meta: [
-      { title: `${loaderData?.title ?? "Video"} — Glaze` },
-      { name: "description", content: `Enriched metadata and moments for ${loaderData?.title ?? "this video"}.` },
+      { title: `${loaderData?.fixture?.title ?? "Video"} — Glaze` },
+      { name: "description", content: `Enriched metadata and moments for ${loaderData?.fixture?.title ?? "this video"}.` },
       { property: "og:title", content: `${loaderData?.title ?? "Video"} — Glaze` },
       { property: "og:description", content: "Moment-level metadata, products, transcript and on-screen text." },
       { property: "og:type", content: "video.other" },
@@ -30,7 +34,13 @@ const PROV = { visual: Eye, speech: Mic, ocr: Type } as const;
 const PROV_LABEL = { visual: "Visual", speech: "Speech", ocr: "On-screen text" } as const;
 
 function VideoPage() {
-  const v = Route.useLoaderData();
+  const { fixture, id } = Route.useLoaderData();
+  if (!fixture) return <LiveVideo id={id} />;
+  return <FixtureVideo video={fixture} />;
+}
+
+function FixtureVideo({ video }: { video: Video }) {
+  const v = video;
   const { m, q } = Route.useSearch();
   const [sel, setSel] = useState(Math.min(m, v.moments.length - 1));
   const [t, setT] = useState(v.moments[sel]?.start ?? 0);
@@ -126,6 +136,178 @@ function VideoPage() {
                     </div>
                     {x.transcript && <p className="mt-2 text-xs italic text-muted-foreground">“{x.transcript}”</p>}
                     {x.ocr && <p className="mt-1 font-mono text-[11px] text-muted-foreground">OCR · {x.ocr}</p>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </AppShell>
+  );
+}
+
+type LiveObservation = {
+  startTime: number;
+  endTime: number;
+  shot: string;
+  action: string;
+  lighting: string;
+  setting: string;
+  skinTone: string;
+  onScreenText: string;
+  spokenMention: string;
+  productName: string;
+  product: { status: string; sku: string | null; line: string | null; reason?: string };
+};
+
+type LiveVideoRecord = {
+  filename: string;
+  campaign: string | null;
+  format: string | null;
+  duration: number;
+  enrichmentStatus: string;
+  observations: LiveObservation[];
+};
+
+function LiveVideo({ id }: { id: string }) {
+  const { q, start } = Route.useSearch();
+  const mediaRef = useRef<HTMLVideoElement>(null);
+  const [video, setVideo] = useState<LiveVideoRecord | null>(null);
+  const [streamUrl, setStreamUrl] = useState<string | null>(null);
+  const [streamError, setStreamError] = useState<string | null>(null);
+  const [missing, setMissing] = useState(false);
+  const [sel, setSel] = useState(0);
+  const [t, setT] = useState(start);
+  const [duration, setDuration] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/videos/${encodeURIComponent(id)}`)
+      .then(async (res) => {
+        if (res.status === 404) {
+          if (!cancelled) setMissing(true);
+          return null;
+        }
+        return res.json();
+      })
+      .then((body) => {
+        if (cancelled || !body) return;
+        setVideo(body);
+        const index = (body.observations as LiveObservation[]).findIndex((item) => start >= item.startTime && start <= item.endTime);
+        if (index >= 0) setSel(index);
+      })
+      .catch(() => { if (!cancelled) setMissing(true); });
+    fetch(`/api/videos/${encodeURIComponent(id)}/stream`)
+      .then(async (res) => {
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.message || "The TwelveLabs stream is unavailable.");
+        if (!cancelled) setStreamUrl(body.videoUrl);
+      })
+      .catch((error: Error) => { if (!cancelled) setStreamError(error.message || "The TwelveLabs stream is unavailable."); });
+    return () => { cancelled = true; };
+  }, [id, start]);
+
+  useEffect(() => {
+    const el = mediaRef.current;
+    if (!el || !streamUrl) return;
+    let hls: Hls | null = null;
+    const seek = () => { if (start > 0) el.currentTime = start; };
+    const onTime = () => setT(el.currentTime);
+    const onMeta = () => { setDuration(el.duration || 0); seek(); };
+    el.addEventListener("timeupdate", onTime);
+    el.addEventListener("loadedmetadata", onMeta);
+    if (el.canPlayType("application/vnd.apple.mpegurl")) {
+      el.src = streamUrl;
+    } else if (Hls.isSupported()) {
+      hls = new Hls();
+      hls.loadSource(streamUrl);
+      hls.attachMedia(el);
+      hls.on(Hls.Events.MANIFEST_PARSED, seek);
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (data.fatal) setStreamError("The TwelveLabs stream could not be played.");
+      });
+    } else {
+      setStreamError("This browser cannot play the TwelveLabs stream.");
+    }
+    return () => {
+      el.removeEventListener("timeupdate", onTime);
+      el.removeEventListener("loadedmetadata", onMeta);
+      hls?.destroy();
+    };
+  }, [streamUrl, start]);
+
+  const seekTo = (seconds: number, index: number) => {
+    setSel(index);
+    setT(seconds);
+    const el = mediaRef.current;
+    if (!el) return;
+    el.currentTime = seconds;
+    el.play().catch(() => {});
+  };
+
+  if (missing) {
+    return (
+      <AppShell search={q}>
+        <div className="mx-auto w-full max-w-3xl px-6 py-6">
+          <Link to="/search" search={{ q }} className="mb-4 inline-flex items-center gap-1.5 font-mono text-xs text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3.5 w-3.5" />Back to results</Link>
+          <h1 className="text-xl font-semibold">No saved video</h1>
+          <p className="mt-2 text-sm text-muted-foreground">This moment is on an index this app did not index. There is no TwelveLabs stream to play.</p>
+        </div>
+      </AppShell>
+    );
+  }
+
+  const moments = video?.observations ?? [];
+  const live = moments.find((item) => t >= item.startTime && t <= item.endTime) ?? null;
+  const length = duration || video?.duration || 0;
+  const pct = (seconds: number) => `${length ? (seconds / length) * 100 : 0}%`;
+
+  return (
+    <AppShell search={q}>
+      <div className="mx-auto w-full max-w-7xl px-6 py-6">
+        <Link to="/search" search={{ q }} className="mb-4 inline-flex items-center gap-1.5 font-mono text-xs text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3.5 w-3.5" />Back to results</Link>
+        <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
+          <div>
+            <div className="overflow-hidden rounded-sm border border-border bg-card">
+              <video ref={mediaRef} className="aspect-video w-full bg-black" controls playsInline preload="metadata" />
+              {streamError && <p className="px-4 py-2 text-xs text-destructive">{streamError}</p>}
+              {!streamUrl && !streamError && <p className="px-4 py-2 font-mono text-[11px] text-muted-foreground">Loading the TwelveLabs stream…</p>}
+              <div className="flex items-center gap-3 px-4 py-3">
+                <span className="font-mono text-xs text-muted-foreground">{fmt(t)} / {fmt(length)}</span>
+                <div className="relative h-2 flex-1 cursor-pointer rounded-full bg-muted" onClick={(event) => { const rect = event.currentTarget.getBoundingClientRect(); seekTo(((event.clientX - rect.left) / rect.width) * length, sel); }}>
+                  {moments.map((item, index) => <div key={index} className={`absolute h-full rounded-full ${index === sel ? "bg-primary" : "bg-primary/30"}`} style={{ left: pct(item.startTime), width: pct(Math.max(item.endTime - item.startTime, 0)) }} />)}
+                  <div className="absolute -top-1 h-4 w-1 rounded bg-foreground" style={{ left: pct(t) }} />
+                </div>
+              </div>
+            </div>
+            {live && (
+              <div className="mt-4 rounded-sm border border-border bg-card p-4 text-sm">
+                <p>{live.shot} · {live.action} · {live.lighting} light</p>
+                {live.setting && <p className="mt-1 text-muted-foreground">{live.setting}</p>}
+                {live.onScreenText && <p className="mt-2 font-mono text-xs">On screen · {live.onScreenText}</p>}
+                {live.spokenMention && <p className="mt-1 text-xs italic text-muted-foreground">Spoken · {live.spokenMention}</p>}
+              </div>
+            )}
+          </div>
+          <aside className="flex flex-col gap-5 lg:sticky lg:top-[5.75rem] lg:max-h-[calc(100dvh-6.75rem)]">
+            <div className="shrink-0">
+              <h1 className="text-xl font-semibold leading-tight">{video?.filename ?? "Loading the saved record…"}</h1>
+              <dl className="mt-3 grid grid-cols-2 gap-y-2 text-xs">
+                {[["Format", video?.format ?? "unknown"], ["Campaign", video?.campaign ?? "none"], ["Duration", fmt(video?.duration ?? length)], ["Enrichment", video?.enrichmentStatus ?? "…"], ["Observations", String(moments.length)]].map(([label, value]) => (
+                  <div key={label}><dt className="text-muted-foreground">{label}</dt><dd className="font-medium">{value}</dd></div>
+                ))}
+              </dl>
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col">
+              <h2 className="mb-2 shrink-0 text-xs uppercase tracking-wider text-muted-foreground">Observations</h2>
+              <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1">
+                {moments.length === 0 && <p className="text-xs text-muted-foreground">Enrichment has no observation for this video.</p>}
+                {moments.map((item, index) => (
+                  <button key={index} onClick={() => seekTo(item.startTime, index)} className={`w-full rounded-sm border p-3 text-left ${index === sel ? "border-primary bg-accent/40" : "border-border"}`}>
+                    <p className="font-mono text-xs text-primary">{fmt(item.startTime)} – {fmt(item.endTime)}</p>
+                    <p className="text-sm font-medium">{item.productName || item.product.line || item.product.sku || "No catalog match"}</p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">{[item.product.sku ?? "no catalog match", item.action, item.shot, item.skinTone ? `${item.skinTone} skin` : ""].filter(Boolean).join(" · ")}</p>
                   </button>
                 ))}
               </div>

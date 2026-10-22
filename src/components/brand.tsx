@@ -1,13 +1,13 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { Database, FolderOpen, Play, Search as SearchIcon, Settings, Shapes } from "lucide-react";
 import { fmt, type Video } from "@/lib/library";
 import twelvelabsLogo from "@/assets/twelvelabs-logo.png";
 import glazeLogo from "@/assets/glaze-logo-white.png";
 
-export function Chip({ on, children, onClick }: { on: boolean; children: React.ReactNode; onClick: () => void }) {
+export function Chip({ on, children, onClick, disabled }: { on: boolean; children: React.ReactNode; onClick?: () => void; disabled?: boolean }) {
   return (
-    <button onClick={onClick} className={`rounded-sm border px-1.5 py-0.5 text-xs transition ${on ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground"}`}>
+    <button type="button" disabled={disabled} onClick={onClick} className={`rounded-sm border px-1.5 py-0.5 text-xs transition ${disabled ? "cursor-not-allowed border-border text-muted-foreground/40" : on ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground"}`}>
       {children}
     </button>
   );
@@ -48,14 +48,34 @@ const NAV: NavItem[] = [
 const CRUMBS: Record<string, string> = { "/": "Search", "/search": "Search · Results", "/ingest": "Ingestion" };
 
 type ListedIndex = { id: string; name: string };
+type SelectedIndex = { id: string; name: string; acceptsVideos: boolean };
+
+type IndexSelectionValue = {
+  ready: boolean;
+  indexes: ListedIndex[];
+  selected: SelectedIndex | null;
+  note: string;
+  busy: boolean;
+  name: string;
+  setName: (value: string) => void;
+  choose: (id: string) => Promise<void>;
+  create: (event: React.FormEvent) => Promise<void>;
+};
+
+const IndexSelectionContext = createContext<IndexSelectionValue | null>(null);
+
+export function useSelectedIndex() {
+  return useContext(IndexSelectionContext);
+}
 
 function noteFor(selected: { name?: string | null; acceptsVideos?: boolean }) {
   return selected.acceptsVideos ? selected.name ?? "" : "uploads are off for this index";
 }
 
-function IndexBanner() {
+function IndexSelection({ children }: { children: React.ReactNode }) {
   const [indexes, setIndexes] = useState<ListedIndex[]>([]);
-  const [selectedId, setSelectedId] = useState("");
+  const [selected, setSelected] = useState<SelectedIndex | null>(null);
+  const [ready, setReady] = useState(false);
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -65,15 +85,19 @@ function IndexBanner() {
     if (!response.ok) throw new Error("index request failed");
     const body = (await response.json()) as { indexes: ListedIndex[]; selected: { id: string | null; name: string | null; acceptsVideos: boolean } };
     setIndexes(body.indexes);
-    setSelectedId(body.selected.id ?? "");
+    setSelected(body.selected.id ? { id: body.selected.id, name: body.selected.name ?? body.selected.id, acceptsVideos: body.selected.acceptsVideos } : null);
     setNote(noteFor(body.selected));
   };
 
   useEffect(() => {
     let cancelled = false;
-    load().catch(() => {
-      if (!cancelled) setNote("API not running");
-    });
+    load()
+      .catch(() => {
+        if (!cancelled) setNote("API not running");
+      })
+      .finally(() => {
+        if (!cancelled) setReady(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -93,8 +117,9 @@ function IndexBanner() {
         setNote(body.message ?? "That index cannot be selected.");
         return;
       }
-      setSelectedId(body.id ?? id);
-      setNote(noteFor(body));
+      const next = { id: body.id ?? id, name: body.name ?? id, acceptsVideos: Boolean(body.acceptsVideos) };
+      setSelected(next);
+      setNote(noteFor(next));
     } finally {
       setBusy(false);
     }
@@ -125,12 +150,21 @@ function IndexBanner() {
     }
   };
 
+  const value = { ready, indexes, selected, note, busy, name, setName, choose, create };
+  return <IndexSelectionContext.Provider value={value}>{children}</IndexSelectionContext.Provider>;
+}
+
+function IndexBanner() {
+  const selection = useSelectedIndex();
+  if (!selection) return null;
+  const { indexes, selected, note, busy, name, setName, choose, create } = selection;
+
   return (
     <div className="sticky top-0 z-30 flex h-10 items-center gap-3 border-b border-white/10 bg-primary px-4 font-mono text-[11px] text-primary-foreground md:px-5">
       <span className="uppercase tracking-widest text-primary-foreground/75">Selected index</span>
       <select
         aria-label="Selected index"
-        value={selectedId}
+        value={selected?.id ?? ""}
         disabled={busy || indexes.length === 0}
         onChange={(event) => choose(event.target.value)}
         className="max-w-[240px] rounded-sm border border-white/20 bg-white/15 px-1.5 py-0.5 text-[11px] text-primary-foreground outline-none disabled:opacity-80"
@@ -167,6 +201,7 @@ export function AppShell({ search: initialSearch, children }: { search?: string;
   const crumb = pathname.startsWith("/video/") ? "Search · Results · Asset" : (CRUMBS[pathname] ?? "Search");
 
   return (
+    <IndexSelection>
     <div className="flex min-h-screen flex-col">
       <IndexBanner />
       <div className="flex min-h-0 flex-1">
@@ -229,5 +264,6 @@ export function AppShell({ search: initialSearch, children }: { search?: string;
       </div>
       </div>
     </div>
+    </IndexSelection>
   );
 }

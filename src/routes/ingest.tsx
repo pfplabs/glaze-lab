@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FileVideo, Upload } from "lucide-react";
-import { AppShell } from "@/components/brand";
+import { AppShell, useSelectedIndex } from "@/components/brand";
 import { fmt } from "@/lib/library";
 
 export const Route = createFileRoute("/ingest")({
@@ -28,31 +28,51 @@ type Job = {
   indexId: string | null;
   updatedAt: string;
   error: { message: string } | null;
+  enrichmentStatus: string;
+  enrichmentFormat: string | null;
+  observationCount: number;
+  enrichmentError: string | null;
 };
 
 const STAGE_STYLE: Record<string, string> = {
   indexed: "border-chart-2/40 bg-chart-2/10 text-chart-2",
+  ready: "border-chart-2/40 bg-chart-2/10 text-chart-2",
   failed: "border-destructive/40 bg-destructive/10 text-destructive",
 };
+
+function enrichmentLabel(job: Job) {
+  if (job.enrichmentStatus === "ready" && job.enrichmentFormat) {
+    return `ready · ${job.enrichmentFormat.replaceAll("_", "/")}`;
+  }
+  return job.enrichmentStatus.replaceAll("_", " ");
+}
 
 function stamp(value: string) {
   return value.replace("T", " ").slice(0, 16);
 }
 
 function IngestPage() {
+  return (
+    <AppShell>
+      <IngestBody />
+    </AppShell>
+  );
+}
+
+function IngestBody() {
+  const selection = useSelectedIndex();
+  const selected = selection?.selected ?? null;
   const [jobs, setJobs] = useState<Job[]>([]);
   const [filter, setFilter] = useState<"all" | "working" | "indexed" | "failed">("all");
   const [campaign, setCampaign] = useState("");
   const [message, setMessage] = useState("");
-  const [acceptsVideos, setAcceptsVideos] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const acceptsVideos = Boolean(selected?.acceptsVideos);
 
   const load = async () => {
-    const [indexResponse, jobsResponse] = await Promise.all([fetch("/api/index"), fetch("/api/ingestions")]);
-    if (!indexResponse.ok || !jobsResponse.ok) throw new Error("API not running");
-    const index = (await indexResponse.json()) as { acceptsVideos: boolean };
+    const jobsResponse = await fetch("/api/ingestions");
+    if (!jobsResponse.ok) throw new Error("API not running");
     const body = (await jobsResponse.json()) as { jobs: Job[] };
-    setAcceptsVideos(index.acceptsVideos);
     setJobs(body.jobs);
   };
 
@@ -67,16 +87,21 @@ function IngestPage() {
     };
   }, []);
 
+  const onIndex = useMemo(
+    () => (selected ? jobs.filter((job) => job.indexId === selected.id) : []),
+    [jobs, selected],
+  );
+
   const counts = useMemo(() => {
-    const working = jobs.filter((job) => job.stage !== "indexed" && job.stage !== "failed").length;
+    const working = onIndex.filter((job) => job.stage !== "indexed" && job.stage !== "failed").length;
     return {
       working,
-      indexed: jobs.filter((job) => job.stage === "indexed").length,
-      failed: jobs.filter((job) => job.stage === "failed").length,
+      indexed: onIndex.filter((job) => job.stage === "indexed").length,
+      failed: onIndex.filter((job) => job.stage === "failed").length,
     };
-  }, [jobs]);
+  }, [onIndex]);
 
-  const visible = jobs.filter((job) => {
+  const visible = onIndex.filter((job) => {
     if (filter === "indexed" || filter === "failed") return job.stage === filter;
     if (filter === "working") return job.stage !== "indexed" && job.stage !== "failed";
     return true;
@@ -107,12 +132,11 @@ function IngestPage() {
   };
 
   return (
-    <AppShell>
       <main className="mx-auto w-full max-w-6xl px-5 py-4">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 max-w-xl">
             <h1 className="text-base font-semibold tracking-tight">Ingestion queue</h1>
-            <p className="mt-0.5 text-[13px] text-muted-foreground">Videos go to the index selected above. Only an index created in this app can receive them. Enrichment is not running yet.</p>
+            <p className="mt-0.5 text-[13px] text-muted-foreground">{selected ? `Queue for ${selected.name}.` : "Loading the selected index."} Only an index created in this app can receive a video. Enrichment starts after indexing finishes.</p>
           </div>
           <div className="flex items-center gap-2">
             <input
@@ -150,24 +174,32 @@ function IngestPage() {
         </div>
 
         <div className="mt-3 overflow-hidden rounded-sm border border-border bg-card">
-          <div className="grid grid-cols-[1fr_70px_90px_140px_120px_110px_140px] items-center gap-3 border-b border-border bg-muted/60 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground max-lg:hidden">
-            <span>File</span><span>Length</span><span>Size</span><span>Campaign</span><span>Index</span><span>Stage</span><span className="text-right">Updated</span>
+          <div className="grid grid-cols-[1fr_70px_72px_110px_100px_90px_120px_130px] items-center gap-3 border-b border-border bg-muted/60 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground max-lg:hidden">
+            <span>File</span><span>Length</span><span>Size</span><span>Campaign</span><span>Index</span><span>Stage</span><span>Enrichment</span><span className="text-right">Updated</span>
           </div>
-          {visible.length === 0 && <p className="p-8 text-center text-[13px] text-muted-foreground">No videos yet.</p>}
+          {visible.length === 0 && <p className="p-8 text-center text-[13px] text-muted-foreground">{selected ? `No videos on ${selected.name}.` : "Loading the queue."}</p>}
           {visible.map((job, i) => (
-            <div key={job.id} className={`grid grid-cols-[1fr_110px_140px] items-center gap-3 px-3 py-2 lg:grid-cols-[1fr_70px_90px_140px_120px_110px_140px] ${i > 0 ? "border-t border-border" : ""}`}>
+            <div key={job.id} className={`grid grid-cols-[1fr_110px_140px] items-center gap-3 px-3 py-2 lg:grid-cols-[1fr_70px_72px_110px_100px_90px_120px_130px] ${i > 0 ? "border-t border-border" : ""}`}>
               <div className="min-w-0">
                 <div className="flex min-w-0 items-center gap-2">
                   <FileVideo className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <span className="truncate font-mono text-xs">{job.sourceFileName}</span>
                 </div>
                 {job.error && <p className="mt-1 truncate text-[11px] text-destructive">{job.error.message}</p>}
+                {job.enrichmentError && <p className="mt-1 truncate text-[11px] text-destructive">{job.enrichmentError}</p>}
               </div>
               <span className="font-mono text-xs tabular-nums text-muted-foreground max-lg:hidden">{job.durationSeconds == null ? "—" : fmt(job.durationSeconds)}</span>
               <span className="font-mono text-xs tabular-nums text-muted-foreground max-lg:hidden">{(job.bytes / 1e6).toFixed(1)} MB</span>
               <span className="truncate text-xs text-muted-foreground max-lg:hidden">{job.campaign || "—"}</span>
-              <span className="truncate font-mono text-[11px] text-muted-foreground max-lg:hidden">{job.indexId || "—"}</span>
+              <span className="truncate text-[11px] text-muted-foreground max-lg:hidden">{selected?.name ?? "—"}</span>
               <span className={`w-fit rounded-sm border px-1.5 py-px font-mono text-[10px] uppercase ${STAGE_STYLE[job.stage] ?? "border-primary/40 bg-accent text-accent-foreground"}`}>{job.stage}</span>
+              <span className="max-lg:hidden">
+                {job.stage === "indexed" && (job.enrichmentStatus === "not_started" || job.enrichmentStatus === "failed") ? (
+                  <button onClick={() => retry(job.id)} className="rounded-sm border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:border-primary/50 hover:text-foreground">Enrich</button>
+                ) : (
+                  <span title={job.observationCount ? `${job.observationCount} observations` : undefined} className={`inline-block max-w-full truncate rounded-sm border px-1.5 py-px font-mono text-[10px] uppercase ${STAGE_STYLE[job.enrichmentStatus] ?? "border-primary/40 bg-accent text-accent-foreground"}`}>{enrichmentLabel(job)}</span>
+                )}
+              </span>
               <span className="text-right">
                 {job.stage === "failed" ? (
                   <button onClick={() => retry(job.id)} className="rounded-sm border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:border-primary/50 hover:text-foreground">Retry</button>
@@ -178,8 +210,7 @@ function IngestPage() {
             </div>
           ))}
         </div>
-        <p className="mt-2 font-mono text-[10px] text-muted-foreground">A repeated file is not uploaded again. Retry continues a failed job from the last step that succeeded.</p>
+        <p className="mt-2 font-mono text-[10px] text-muted-foreground">A repeated file is not uploaded again. Retry continues a failed upload. Enrich continues a saved segmentation task.</p>
       </main>
-    </AppShell>
   );
 }

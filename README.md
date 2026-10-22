@@ -1,6 +1,6 @@
 # Glaze
 
-Proof of concept for moment search over Glaze marketing video. The screens are the Lovable UI. Search on those screens still uses the six fixture videos in `src/lib/library.ts`. Ingest, so far, is a local command that checks a file and writes a job. It does not call TwelveLabs.
+Proof of concept for moment search over Glaze marketing video. The screens are the Lovable UI. Search calls TwelveLabs on the selected index and joins each moment to an enrichment observation that overlaps it. The six fixture videos in `src/lib/library.ts` remain only for the old sample video pages.
 
 ## Prerequisites
 
@@ -23,7 +23,7 @@ bun install
 bun run dev
 ```
 
-Open the URL Vite prints. The top bar lists the indexes on the account, plus `sample_social_media`, which is selected by default. Add files stays off for that index and for any other index this app did not create. Creating an index from the bar calls TwelveLabs, records the id locally, and is the only way a video can be uploaded. Search still uses the six fixture videos. Enrichment does not run yet. The player is still a timer on a colored frame.
+Open the URL Vite prints. The top bar lists the indexes on the account, plus `sample_social_media`, which is selected by default. Add files stays off for that index and for any other index this app did not create. Creating an index from the bar calls TwelveLabs, records the id locally, and is the only way a video can be uploaded. Pegasus 1.6 segments the same upload only after Marengo has finished indexing it. The queue shows indexed when Marengo finishes, and a separate enrichment status. Search sends the words as written, with visual and audio, and shows rank rather than a percentage. A SKU listed across campaigns is read from finished enrichment, not from search rank. Opening a result plays the TwelveLabs HLS stream for that indexed asset and seeks to the moment.
 
 ## Local ingest
 
