@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { ArrowRight, Clock, Search } from "lucide-react";
 import { EXAMPLES } from "@/lib/library";
-import { AppShell } from "@/components/brand";
+import { AppShell, useSelectedIndex, type LibraryCategory } from "@/components/brand";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -18,14 +18,31 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-const STATS: [string, string][] = [
-  ["10,003", "SKUs in catalog"],
-  ["18,420", "videos indexed"],
-  ["1.2M", "enriched moments"],
-  ["3", "channels · e-com, social, retail"],
-];
+function titleCase(value: string) {
+  return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function categoryCaption(categories: LibraryCategory[]) {
+  if (categories.length === 0) return "categories";
+  const noun = categories.length === 1 ? "category" : "categories";
+  return `${noun} · ${categories.map((category) => titleCase(category.name)).join(", ")}`;
+}
+
+function channelCaption(channels: string[]) {
+  return `channels · ${channels.join(", ")}`;
+}
 
 function Index() {
+  return (
+    <AppShell>
+      <Home />
+    </AppShell>
+  );
+}
+
+function Home() {
+  const selection = useSelectedIndex();
+  const summary = selection?.summary ?? null;
   const navigate = useNavigate();
   const [q, setQ] = useState("");
   const [recent, setRecent] = useState<string[]>([]);
@@ -36,7 +53,6 @@ function Index() {
   };
 
   return (
-    <AppShell>
       <main className="mx-auto w-full max-w-5xl px-5 py-6">
         <div className="flex items-baseline justify-between">
           <h1 className="text-base font-semibold tracking-tight">Moment search</h1>
@@ -84,11 +100,14 @@ function Index() {
             <div>
               <h2 className="mb-1.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Browse by category</h2>
               <div className="glass divide-y divide-border rounded-lg">
-                {([["Makeup", "4,812 SKUs", "red lipstick"], ["Skincare", "3,140 SKUs", "serum"], ["Haircare", "2,051 SKUs", "hair mask"]] as const).map(([t, d, s]) => (
-                  <button key={t} onClick={() => run(s)} className="flex w-full items-center justify-between px-3 py-2 text-[13px] hover:bg-accent/50">
-                    <span>{t}</span><span className="font-mono text-[11px] text-muted-foreground">{d}</span>
+                {(summary?.categories ?? []).map((category) => (
+                  <button key={category.name} onClick={() => run(category.name)} className="flex w-full items-center justify-between px-3 py-2 text-[13px] hover:bg-accent/50">
+                    <span>{titleCase(category.name)}</span>
+                    <span className="font-mono text-[11px] text-muted-foreground">{category.skuCount.toLocaleString("en-US")} SKUs</span>
                   </button>
                 ))}
+                {summary && summary.categories.length === 0 && <p className="px-3 py-2 text-xs text-muted-foreground">No categories in the catalog.</p>}
+                {!summary && <p className="px-3 py-2 text-xs text-muted-foreground">Catalog counts load with the index.</p>}
               </div>
             </div>
           </section>
@@ -96,12 +115,26 @@ function Index() {
 
         <section className="mt-6 border-t border-border pt-4">
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            {STATS.map(([n, l]) => (
+            {(summary
+              ? [
+                  [summary.skuCount.toLocaleString("en-US"), "SKUs in catalog"],
+                  [summary.videoCount.toLocaleString("en-US"), "videos indexed"],
+                  [summary.momentCount.toLocaleString("en-US"), "enriched moments"],
+                  summary.channels.length
+                    ? [String(summary.channels.length), channelCaption(summary.channels)]
+                    : [String(summary.categories.length), categoryCaption(summary.categories)],
+                ]
+              : [
+                  ["—", "SKUs in catalog"],
+                  ["—", "videos indexed"],
+                  ["—", "enriched moments"],
+                  ["—", "categories"],
+                ]
+            ).map(([n, l]) => (
               <div key={l}><p className="font-mono text-lg font-medium tabular-nums">{n}</p><p className="text-[11px] text-muted-foreground">{l}</p></div>
             ))}
           </div>
         </section>
       </main>
-    </AppShell>
   );
 }

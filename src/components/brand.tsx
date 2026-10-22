@@ -13,11 +13,13 @@ export function Chip({ on, children, onClick, disabled }: { on: boolean; childre
   );
 }
 
-export function Thumb({ hue, t, big }: { hue: number; t: number; big?: boolean }) {
+export function Thumb({ hue, t, big, src, previewing, onMouseEnter, onMouseLeave, children }: { hue: number; t: number; big?: boolean; src?: string | null; previewing?: boolean; onMouseEnter?: () => void; onMouseLeave?: () => void; children?: React.ReactNode }) {
   return (
-    <div className={`thumb relative shrink-0 overflow-hidden rounded-sm ${big ? "aspect-video w-full" : "h-16 w-28"}`} style={{ "--h": hue } as React.CSSProperties}>
-      <Play className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 text-primary-foreground/90" />
-      <span className="absolute bottom-1 right-1 rounded-sm bg-foreground/70 px-1 font-mono text-[10px] text-background">{fmt(t)}</span>
+    <div onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} className={`thumb relative shrink-0 overflow-hidden rounded-sm ${big ? "aspect-video w-full" : "h-16 w-28"}`} style={{ "--h": hue } as React.CSSProperties}>
+      {src && <img src={src} alt="" className="absolute inset-0 h-full w-full object-cover" />}
+      {children}
+      <Play className={`pointer-events-none absolute left-1/2 top-1/2 z-10 h-4 w-4 -translate-x-1/2 -translate-y-1/2 text-primary-foreground/90 transition-opacity ${previewing ? "opacity-0" : ""}`} />
+      <span className="pointer-events-none absolute bottom-1 right-1 z-10 rounded-sm bg-foreground/70 px-1 font-mono text-[10px] text-background">{fmt(t)}</span>
     </div>
   );
 }
@@ -50,10 +52,22 @@ const CRUMBS: Record<string, string> = { "/": "Search", "/search": "Search · Re
 type ListedIndex = { id: string; name: string };
 type SelectedIndex = { id: string; name: string; acceptsVideos: boolean };
 
+export type LibraryCategory = { name: string; skuCount: number };
+
+export type LibrarySummary = {
+  skuCount: number;
+  videoCount: number;
+  momentCount: number;
+  channels: string[];
+  categories: LibraryCategory[];
+  syncedAt: string | null;
+};
+
 type IndexSelectionValue = {
   ready: boolean;
   indexes: ListedIndex[];
   selected: SelectedIndex | null;
+  summary: LibrarySummary | null;
   note: string;
   busy: boolean;
   name: string;
@@ -75,10 +89,21 @@ function noteFor(selected: { name?: string | null; acceptsVideos?: boolean }) {
 function IndexSelection({ children }: { children: React.ReactNode }) {
   const [indexes, setIndexes] = useState<ListedIndex[]>([]);
   const [selected, setSelected] = useState<SelectedIndex | null>(null);
+  const [summary, setSummary] = useState<LibrarySummary | null>(null);
   const [ready, setReady] = useState(false);
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const loadLibrary = async () => {
+    const response = await fetch("/api/library");
+    if (!response.ok) {
+      setSummary(null);
+      return;
+    }
+    const body = (await response.json()) as { summary: LibrarySummary };
+    setSummary(body.summary);
+  };
 
   const load = async () => {
     const response = await fetch("/api/indexes");
@@ -87,6 +112,7 @@ function IndexSelection({ children }: { children: React.ReactNode }) {
     setIndexes(body.indexes);
     setSelected(body.selected.id ? { id: body.selected.id, name: body.selected.name ?? body.selected.id, acceptsVideos: body.selected.acceptsVideos } : null);
     setNote(noteFor(body.selected));
+    await loadLibrary();
   };
 
   useEffect(() => {
@@ -120,6 +146,7 @@ function IndexSelection({ children }: { children: React.ReactNode }) {
       const next = { id: body.id ?? id, name: body.name ?? id, acceptsVideos: Boolean(body.acceptsVideos) };
       setSelected(next);
       setNote(noteFor(next));
+      await loadLibrary();
     } finally {
       setBusy(false);
     }
@@ -150,7 +177,7 @@ function IndexSelection({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const value = { ready, indexes, selected, note, busy, name, setName, choose, create };
+  const value = { ready, indexes, selected, summary, note, busy, name, setName, choose, create };
   return <IndexSelectionContext.Provider value={value}>{children}</IndexSelectionContext.Provider>;
 }
 
@@ -193,6 +220,35 @@ function IndexBanner() {
   );
 }
 
+function counted(count: number, singular: string, plural: string) {
+  return `${count.toLocaleString("en-US")} ${count === 1 ? singular : plural}`;
+}
+
+function formatSync(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  const hours = String(date.getUTCHours()).padStart(2, "0");
+  const minutes = String(date.getUTCMinutes()).padStart(2, "0");
+  return `${hours}:${minutes} UTC`;
+}
+
+function ShellFooter() {
+  const summary = useSelectedIndex()?.summary ?? null;
+  const sync = summary?.syncedAt ? formatSync(summary.syncedAt) : null;
+  return (
+    <footer className="flex items-center gap-4 border-t bg-muted/50 px-4 py-1.5 font-mono text-[10px] text-muted-foreground md:px-5">
+      <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-chart-2" />Index healthy</span>
+      <span>
+        {summary
+          ? `${counted(summary.videoCount, "asset", "assets")} · ${counted(summary.momentCount, "moment", "moments")}`
+          : "— assets · — moments"}
+      </span>
+      {sync && <span className="hidden sm:inline">Last sync {sync}</span>}
+      <span className="ml-auto">pilot · sample data</span>
+    </footer>
+  );
+}
+
 export function AppShell({ search: initialSearch, children }: { search?: string; children: React.ReactNode }) {
   const navigate = useNavigate();
   const pathname = useLocation().pathname;
@@ -205,7 +261,7 @@ export function AppShell({ search: initialSearch, children }: { search?: string;
     <div className="flex min-h-screen flex-col">
       <IndexBanner />
       <div className="flex min-h-0 flex-1">
-      <aside className="sidebar-gloss sticky top-10 hidden h-[calc(100vh-2.5rem)] w-52 shrink-0 flex-col rounded-bl-3xl rounded-tr-3xl border-r border-sidebar-border text-sidebar-foreground md:flex">
+      <aside className="sidebar-gloss sticky top-10 hidden h-[calc(100vh-2.5rem)] w-52 shrink-0 flex-col rounded-br-3xl rounded-tr-3xl border-r border-sidebar-border text-sidebar-foreground md:flex">
         <div className="border-b border-sidebar-border px-4 py-3">
           <img src={glazeLogo} alt="Glaze" loading="lazy" width={1514} height={629} className="block h-7 w-auto drop-shadow-[0_0_16px_rgba(236,72,153,0.45)]" />
           <p className="mt-1 text-[10px] italic leading-snug text-sidebar-foreground/60">The foundation of every frame.</p>
@@ -226,11 +282,11 @@ export function AppShell({ search: initialSearch, children }: { search?: string;
           )}
         </nav>
         <div className="space-y-2 border-t border-sidebar-border p-3">
-          <div className="rounded-md border border-white/10 bg-white/5 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]">
-            <p className="mb-1.5 text-[9px] uppercase tracking-wider text-sidebar-foreground/55">Powered by</p>
-            <div className="mx-auto flex w-fit items-center justify-center rounded-md bg-white px-1.5 py-1">
-              <img src={twelvelabsLogo} alt="TwelveLabs" width={1024} height={206} className="h-4 w-auto" />
-            </div>
+          <div className="flex w-fit max-w-full items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] py-1 pl-2.5 pr-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]">
+            <span className="shrink-0 text-[9px] font-medium uppercase tracking-[0.14em] text-sidebar-foreground/50">Powered by</span>
+            <span className="flex items-center rounded-full bg-white px-1.5 py-0.5">
+              <img src={twelvelabsLogo} alt="TwelveLabs" width={1024} height={206} className="h-3.5 w-auto" />
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex h-6 w-6 items-center justify-center rounded-sm bg-sidebar-accent font-mono text-[10px] text-sidebar-foreground">JD</div>
@@ -255,12 +311,7 @@ export function AppShell({ search: initialSearch, children }: { search?: string;
           <span className="ml-auto hidden rounded-sm border border-border px-1.5 py-px font-mono text-[10px] uppercase tracking-wide text-muted-foreground sm:block">Internal demo</span>
         </header>
         <div className="flex-1">{children}</div>
-        <footer className="flex items-center gap-4 border-t bg-muted/50 px-4 py-1.5 font-mono text-[10px] text-muted-foreground md:px-5">
-          <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-chart-2" />Index healthy</span>
-          <span>18,420 assets · 1.2M moments</span>
-          <span className="hidden sm:inline">Last sync 04:12 UTC</span>
-          <span className="ml-auto">pilot · sample data</span>
-        </footer>
+        <ShellFooter />
       </div>
       </div>
     </div>

@@ -38,10 +38,10 @@ function jobIndexId(job) {
   return job.providers?.twelvelabs?.indexId ?? null;
 }
 
-function catalogSku(query, skus) {
+function catalogSkus(query, skus) {
   const match = String(query ?? "").match(/videos featuring\s+([A-Za-z0-9-]+)\s+across campaigns/i);
-  if (match) return match[1].toUpperCase();
-  if (!String(query ?? "").trim() && skus.length === 1) return skus[0];
+  if (match) return [match[1].toUpperCase()];
+  if (!String(query ?? "").trim() && skus.length > 0) return skus;
   return null;
 }
 
@@ -73,6 +73,28 @@ function jobsByVideoId(jobs) {
   return byId;
 }
 
+function httpsUrl(value) {
+  return typeof value === "string" && value.startsWith("https://") ? value : null;
+}
+
+async function fillThumbnails(client, hits, jobs) {
+  if (!client?.indexes?.indexedAssets?.retrieve) return;
+  const byVideo = jobsByVideoId(jobs);
+  const lookups = new Map();
+  for (const hit of hits) {
+    if (hit.thumbnailUrl || !hit.videoId || lookups.has(hit.videoId)) continue;
+    const provider = byVideo.get(hit.videoId)?.providers?.twelvelabs ?? {};
+    if (!provider.indexId || !provider.indexedAssetId) continue;
+    lookups.set(hit.videoId, client.indexes.indexedAssets.retrieve(provider.indexId, provider.indexedAssetId)
+      .then((indexed) => httpsUrl(indexed?.hls?.thumbnailUrls?.[0]))
+      .catch(() => null));
+  }
+  const found = new Map(await Promise.all([...lookups].map(async ([id, promise]) => [id, await promise])));
+  for (const hit of hits) {
+    if (!hit.thumbnailUrl && found.get(hit.videoId)) hit.thumbnailUrl = found.get(hit.videoId);
+  }
+}
+
 function clipRows(result) {
   const rows = [];
   for (const item of result?.data ?? []) {
@@ -84,6 +106,7 @@ function clipRows(result) {
           end: clip.end ?? null,
           rank: clip.rank ?? null,
           transcription: clip.transcription ?? "",
+          thumbnailUrl: httpsUrl(clip.thumbnailUrl),
           userMetadata: clip.userMetadata ?? item.userMetadata ?? null,
         });
       }
@@ -95,6 +118,7 @@ function clipRows(result) {
       end: item.end ?? null,
       rank: item.rank ?? null,
       transcription: item.transcription ?? "",
+      thumbnailUrl: httpsUrl(item.thumbnailUrl),
       userMetadata: item.userMetadata ?? null,
     });
   }
@@ -122,6 +146,7 @@ function hitFromJob(job, observation, extra) {
     end: extra.end ?? observation?.endTime ?? null,
     rank: extra.rank ?? null,
     transcription: extra.transcription ?? "",
+    thumbnailUrl: extra.thumbnailUrl ?? null,
     product: productOf(observation),
     action: observation?.action ?? null,
     shot: observation?.shot ?? null,
@@ -184,30 +209,60 @@ function throwProvider(error) {
   throw wrapped;
 }
 
-async function catalogHits(indexId, sku) {
+async function catalogHits(indexId, skus) {
+  const wanted = new Set(skus);
   const jobs = (await listJobs()).filter((job) => jobIndexId(job) === indexId && job.enrichment?.status === "ready");
   const hits = [];
   for (const job of jobs) {
     for (const observation of job.enrichment.observations ?? []) {
-      if (observation.product?.status === "candidate" && observation.product.sku === sku) {
+      if (observation.product?.status === "candidate" && wanted.has(observation.product.sku)) {
         hits.push(hitFromJob(job, observation, { rank: null, transcription: "", enrichment: "joined" }));
       }
     }
   }
-  return { jobsScanned: jobs.length, hits };
+  return { jobsScanned: jobs.length, hits, jobs };
 }
 
 export async function searchFacets(indexId) {
-  const catalog = await loadCatalog();
   const jobs = (await listJobs()).filter((job) => jobIndexId(job) === indexId);
   const campaigns = [...new Set(jobs.map((job) => job.campaign).filter(Boolean))].sort();
   return {
     formats: Object.keys(FORMAT_TO_VALUE).filter((label) => label !== "Creator"),
     disabledFormats: ["Creator"],
     attributes: Object.keys(ATTRIBUTE_TO_FIELD),
-    skus: catalog.products.map((product) => product.id),
     campaigns,
     productStatuses: [...PRODUCT_STATUSES],
+  };
+}
+
+export async function librarySummary(indexId) {
+  const catalog = await loadCatalog();
+  const jobs = indexId
+    ? (await listJobs()).filter((job) => jobIndexId(job) === indexId && job.stage === "indexed")
+    : [];
+  let momentCount = 0;
+  let syncedAt = null;
+  const channels = new Set();
+  for (const job of jobs) {
+    if (job.channel) channels.add(String(job.channel));
+    if (job.updatedAt && (!syncedAt || String(job.updatedAt) > syncedAt)) syncedAt = String(job.updatedAt);
+    if (job.enrichment?.status === "ready") momentCount += job.enrichment.observations?.length ?? 0;
+  }
+  const categoryCounts = new Map();
+  for (const product of catalog.products) {
+    const name = String(product.category ?? "").trim();
+    if (!name) continue;
+    categoryCounts.set(name, (categoryCounts.get(name) ?? 0) + 1);
+  }
+  return {
+    skuCount: catalog.products.length,
+    videoCount: jobs.length,
+    momentCount,
+    channels: [...channels].sort(),
+    categories: [...categoryCounts.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([name, skuCount]) => ({ name, skuCount })),
+    syncedAt,
   };
 }
 
@@ -223,9 +278,9 @@ export async function searchLibrary(client, index, body) {
     || filters.productStatus
     || filters.appliedOnly,
   );
-  const sku = catalogSku(query, filters.skus);
+  const skuList = catalogSkus(query, filters.skus);
 
-  if (sku) {
+  if (skuList) {
     if (!enrichedHere) {
       return {
         mode: "catalog",
@@ -237,8 +292,9 @@ export async function searchLibrary(client, index, body) {
         hits: [],
       };
     }
-    const found = await catalogHits(index.id, sku);
+    const found = await catalogHits(index.id, skuList);
     const hits = found.hits.filter((hit) => passesLocalFilters(hit, filters));
+    await fillThumbnails(client, hits, found.jobs);
     return {
       mode: "catalog",
       indexId: index.id,
@@ -288,6 +344,7 @@ export async function searchLibrary(client, index, body) {
           end: row.end,
           rank: row.rank,
           transcription: row.transcription,
+          thumbnailUrl: row.thumbnailUrl,
           enrichment: observation ? "joined" : "missing",
         })
       : {
@@ -300,6 +357,7 @@ export async function searchLibrary(client, index, body) {
           end: row.end,
           rank: row.rank,
           transcription: row.transcription ?? "",
+          thumbnailUrl: row.thumbnailUrl ?? null,
           product: { status: null, sku: null, line: null },
           action: null,
           shot: null,
@@ -316,6 +374,7 @@ export async function searchLibrary(client, index, body) {
     }
     hits.push(hit);
   }
+  await fillThumbnails(client, hits, jobs);
 
   const notes = [];
   if (!enrichedHere) notes.push("This index was not enriched by this app. Each moment has a rank and a time range, and no product observation.");

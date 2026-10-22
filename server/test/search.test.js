@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
 
+import { CATALOG_SIZE, CATEGORY_QUOTAS } from "../src/synthetic-catalog.js";
 import { createApiServer } from "../src/http.js";
 import { SAMPLE_SOCIAL_INDEX } from "../src/index-selection.js";
 
@@ -36,7 +37,7 @@ function fakeClient() {
       indexedAssets: {
         async retrieve(indexId, indexedAssetId) {
           calls.push(["stream.retrieve", indexId, indexedAssetId]);
-          return { hls: { status: "COMPLETE", videoUrl: "https://stream.example/playlist.m3u8" } };
+          return { hls: { status: "COMPLETE", videoUrl: "https://stream.example/playlist.m3u8", thumbnailUrls: ["https://stream.example/asset-thumb.jpg"] } };
         },
       },
       async list() {
@@ -51,7 +52,7 @@ function fakeClient() {
         calls.push(["search.create", request]);
         return {
           data: [
-            { videoId: "indexed_1", start: 1.2, end: 3.5, rank: 2, transcription: "blend the foundation" },
+            { videoId: "indexed_1", start: 1.2, end: 3.5, rank: 2, transcription: "blend the foundation", thumbnailUrl: "https://stream.example/thumb.jpg" },
             { videoId: "indexed_1", start: 10, end: 12, rank: 5, transcription: "later" },
             { videoId: "indexed_other", start: 0, end: 2, rank: 1, transcription: "someone else" },
           ],
@@ -86,6 +87,7 @@ describe("search", { concurrency: 1 }, () => {
       sourceFileName: "foundation.mp4",
       durationSeconds: 20,
       campaign: "Second Skin",
+      channel: "YouTube",
       providers: { twelvelabs: { assetId: "asset_1", indexId: "idx_ours_1", indexedAssetId: "indexed_1" } },
       enrichment: {
         status: "ready",
@@ -140,17 +142,19 @@ describe("search", { concurrency: 1 }, () => {
     assert.equal(joined.product.status, "candidate");
     assert.equal(joined.action, "applied");
     assert.equal(joined.rank, 2);
+    assert.equal(joined.thumbnailUrl, "https://stream.example/thumb.jpg");
+    assert.equal(later.thumbnailUrl, "https://stream.example/asset-thumb.jpg");
     assert.equal(joined.confidence, undefined);
     assert.equal(later.product.sku, null);
     assert.equal(later.enrichment, "missing");
     assert.equal(body.hits.some((hit) => hit.videoId === "indexed_other"), true);
-    const request = client.calls.at(-1)[1];
+    const request = client.calls.findLast((call) => call[0] === "search.create")[1];
     assert.equal(request.queryText, QUERY);
     assert.equal(request.indexId, "idx_ours_1");
   });
 
   it("lists a SKU across campaigns from enrichment and does not search", async () => {
-    const before = client.calls.length;
+    const before = client.calls.filter((call) => call[0] === "search.create").length;
     const response = await fetch(`${base}/api/search`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -158,11 +162,26 @@ describe("search", { concurrency: 1 }, () => {
     });
     const body = await response.json();
     assert.equal(body.mode, "catalog");
-    assert.equal(client.calls.length, before);
+    assert.equal(client.calls.filter((call) => call[0] === "search.create").length, before);
     assert.equal(body.hits.length, 1);
     assert.equal(body.hits[0].product.sku, "SS-FDN-340");
     assert.equal(body.hits[0].rank, null);
     assert.match(body.note, /enrichment finished/);
+    const catalog = await fetch(`${base}/api/catalog?q=inda`);
+    const products = await catalog.json();
+    assert.equal(catalog.status, 200);
+    assert.equal(products.products.some((item) => item.id === "FENTY-INDA"), true);
+    assert.equal(products.products.every((item) => item.aliases === undefined), true);
+    const narrowed = await fetch(`${base}/api/search`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query: "", skus: ["SS-FDN-340", "FENTY-INDA"], formats: ["Tutorial"] }),
+    });
+    const narrowedBody = await narrowed.json();
+    assert.equal(narrowedBody.mode, "catalog");
+    assert.equal(narrowedBody.hits.length, 1);
+    assert.equal(narrowedBody.hits[0].product.sku, "SS-FDN-340");
+    assert.equal(client.calls.filter((call) => call[0] === "search.create").length, before);
   });
 
   it("sends one campaign as metadata and keeps an applied-only phrase intact", async () => {
@@ -175,7 +194,7 @@ describe("search", { concurrency: 1 }, () => {
       }),
     });
     const body = await response.json();
-    const request = client.calls.at(-1)[1];
+    const request = client.calls.findLast((call) => call[0] === "search.create")[1];
     assert.equal(request.queryText, "moments where a product is being applied, not just shown");
     assert.equal(request.filter, JSON.stringify({ campaign: "Second Skin" }));
     assert.equal(body.hits.length, 1);
@@ -189,7 +208,7 @@ describe("search", { concurrency: 1 }, () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ query: QUERY, campaigns: ["Second Skin", "Other"] }),
     });
-    assert.equal(client.calls.at(-1)[1].filter, undefined);
+    assert.equal(client.calls.findLast((call) => call[0] === "search.create")[1].filter, undefined);
   });
 
   it("refuses a format the enrichment does not store", async () => {
@@ -213,8 +232,8 @@ describe("search", { concurrency: 1 }, () => {
     });
     const body = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(client.calls.at(-1)[0], "search.retrieve");
-    assert.equal(client.calls.at(-1)[1], "page_2");
+    const retrieved = client.calls.findLast((call) => call[0] === "search.retrieve");
+    assert.equal(retrieved[1], "page_2");
     assert.equal(client.calls.filter((call) => call[0] === "search.create").length, before);
     assert.equal(body.hits[0].product.sku, "SS-FDN-340");
   });
@@ -253,5 +272,47 @@ describe("search", { concurrency: 1 }, () => {
     assert.deepEqual(client.calls.at(-1), ["stream.retrieve", "idx_ours_1", "indexed_1"]);
     const missing = await fetch(`${base}/api/videos/does-not-exist`);
     assert.equal(missing.status, 404);
+  });
+
+  it("counts catalog SKUs and only videos indexed on the selected index", async () => {
+    const listed = await fetch(`${base}/api/indexes`);
+    const listing = await listed.json();
+    if (!listing.indexes.some((index) => index.id === "idx_ours_1")) {
+      const created = await fetch(`${base}/api/indexes`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: "lab-library" }),
+      });
+      assert.equal(created.status, 201);
+    }
+    const selected = await fetch(`${base}/api/index`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: "idx_ours_1" }),
+    });
+    assert.equal(selected.status, 200);
+    const response = await fetch(`${base}/api/library`);
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(body.summary.skuCount, CATALOG_SIZE);
+    assert.equal(body.summary.videoCount, 1);
+    assert.equal(body.summary.momentCount, 2);
+    assert.deepEqual(body.summary.channels, ["YouTube"]);
+    assert.deepEqual(
+      body.summary.categories,
+      CATEGORY_QUOTAS.map(([name, skuCount]) => ({ name, skuCount })).sort((a, b) => a.name.localeCompare(b.name)),
+    );
+
+    const sample = await fetch(`${base}/api/index`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: SAMPLE_SOCIAL_INDEX.id }),
+    });
+    assert.equal(sample.status, 200);
+    const empty = await (await fetch(`${base}/api/library`)).json();
+    assert.equal(empty.summary.skuCount, CATALOG_SIZE);
+    assert.equal(empty.summary.videoCount, 0);
+    assert.equal(empty.summary.momentCount, 0);
+    assert.deepEqual(empty.summary.channels, []);
   });
 });

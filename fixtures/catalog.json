@@ -1,6 +1,5 @@
 {
-  "synthetic": true,
-  "note": "Products named in the Teach Me Beauty everyday-look video. These are not the customer's 10,000 SKUs. A shade word on its own is not a SKU.",
+  "note": "Products named in the Teach Me Beauty everyday-look video. Synthetic SKUs are added at load so the catalog has 10,000. A shade word on its own is not a SKU.",
   "products": [
     {
       "id": "TARTE-PRIMER",

@@ -290,7 +290,7 @@ function LiveVideo({ id }: { id: string }) {
               </div>
             )}
           </div>
-          <aside className="flex flex-col gap-5 lg:sticky lg:top-[5.75rem] lg:max-h-[calc(100dvh-6.75rem)]">
+          <aside className="flex flex-col gap-5 lg:sticky lg:top-[5.75rem] lg:max-h-[calc(100dvh-12.25rem)]">
             <div className="shrink-0">
               <h1 className="text-xl font-semibold leading-tight">{video?.filename ?? "Loading the saved record…"}</h1>
               <dl className="mt-3 grid grid-cols-2 gap-y-2 text-xs">

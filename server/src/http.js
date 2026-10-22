@@ -3,10 +3,11 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { findProducts } from "./catalog.js";
 import { ingestLocalFile } from "./ingest.js";
 import { createOwnedIndex, listSelectableIndexes, requireOwnedIndex, selectKnownIndex, selectedIndex } from "./index-selection.js";
 import { publishJob } from "./publish.js";
-import { findLibraryVideo, searchFacets, searchLibrary, streamForLibraryVideo } from "./search.js";
+import { findLibraryVideo, librarySummary, searchFacets, searchLibrary, streamForLibraryVideo } from "./search.js";
 import { listJobs, updateJob } from "./store.js";
 import { DIRECT_LOCAL_VIDEO_MAX_BYTES } from "./limits.js";
 
@@ -180,9 +181,13 @@ export function createApiServer({ client = null, probe } = {}) {
         sendJson(res, 200, await selectKnownIndex(body.id, client));
         return;
       }
+      if (req.method === "GET" && pathname === "/api/catalog") {
+        sendJson(res, 200, { products: await findProducts(url.searchParams.get("q")) });
+        return;
+      }
       if (req.method === "GET" && pathname === "/api/library") {
         const index = await selectedIndex(client);
-        sendJson(res, 200, { index, facets: await searchFacets(index.id) });
+        sendJson(res, 200, { index, facets: await searchFacets(index.id), summary: await librarySummary(index.id) });
         return;
       }
       if (req.method === "POST" && pathname === "/api/search") {

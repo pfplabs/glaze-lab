@@ -2,13 +2,38 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { syntheticProducts } from "./synthetic-catalog.js";
+
 const catalogPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../fixtures/catalog.json");
 
 let cached;
 
+export async function findProducts(query) {
+  const catalog = await loadCatalog();
+  const needle = String(query ?? "").trim().toLowerCase();
+  if (needle.length < 2) return [];
+  return catalog.products
+    .filter((product) => {
+      const haystack = [product.id, product.brand, product.name, product.line, product.shade, ...(product.aliases ?? [])]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(needle);
+    })
+    .slice(0, 8)
+    .map((product) => ({
+      id: product.id,
+      brand: product.brand ?? null,
+      name: product.name,
+      line: product.line ?? null,
+      shade: product.shade ?? null,
+    }));
+}
+
 export async function loadCatalog() {
   if (!cached) {
-    cached = JSON.parse(await readFile(catalogPath, "utf8"));
+    const file = JSON.parse(await readFile(catalogPath, "utf8"));
+    cached = { ...file, products: [...file.products, ...syntheticProducts(file.products)] };
   }
   return cached;
 }
